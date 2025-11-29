@@ -1,0 +1,2 @@
+# Video summary evaluation package
+

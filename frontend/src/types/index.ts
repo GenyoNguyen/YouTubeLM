@@ -4,7 +4,6 @@ export interface Video {
   id: string;
   title: string;
   url: string;
-  chapter: string;
   duration: number;
 }
 
@@ -19,6 +18,5 @@ export interface ChatMessage {
 export interface Source {
   video_url: string;
   timestamp: string;
-  chapter: string;
 }
 

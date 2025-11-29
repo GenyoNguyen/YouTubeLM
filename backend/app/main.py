@@ -5,9 +5,9 @@ from app.api import (
     health,
     sessions,
     qa,
-    text_summary,
     video_summary,
     quiz,
+    ingestion,
 )
 
 app = FastAPI(title="YouTubeLM API")
@@ -16,7 +16,7 @@ app = FastAPI(title="YouTubeLM API")
 app.include_router(health.router)
 app.include_router(sessions.router)
 app.include_router(qa.router)
-app.include_router(text_summary.router)
 app.include_router(video_summary.router)
 app.include_router(quiz.router)
+app.include_router(ingestion.router)
 
