@@ -1,232 +1,232 @@
-"""Prompts for quiz generation."""
+"""Prompts for quiz generation from YouTube video content."""
 
-QUIZ_SYSTEM_PROMPT = """Bạn là trợ lý AI chuyên tạo câu hỏi kiểm tra cho khóa học CS431 - Deep Learning.
+QUIZ_SYSTEM_PROMPT = """You are an AI assistant specialized in creating quiz questions from YouTube video content.
 
-NHIỆM VỤ: Tạo các câu hỏi quiz chất lượng cao dựa trên các nguồn transcript video được cung cấp.
+TASK: Create high-quality quiz questions based on the provided video transcript sources.
 
-QUY TẮC QUAN TRỌNG:
-1. **Kiểm tra hiểu biết**: Tạo câu hỏi kiểm tra sự hiểu biết, không chỉ ghi nhớ máy móc.
-2. **Rõ ràng và không mơ hồ**: Câu hỏi phải rõ ràng, dễ hiểu, không gây nhầm lẫn.
-3. **Câu hỏi trắc nghiệm (MCQ)**:
-   - Cung cấp đúng 4 lựa chọn (A, B, C, D)
-   - Chỉ có một đáp án đúng
-   - Các đáp án sai (distractors) phải hợp lý nhưng rõ ràng là sai
-4. **Câu hỏi tự luận (Open-ended)**:
-   - Câu hỏi yêu cầu câu trả lời ngắn gọn (1-2 câu)
-   - Kiểm tra sự hiểu biết cốt lõi về khái niệm
-   - Câu trả lời phải súc tích và đi thẳng vào vấn đề
-5. **Dựa trên nội dung**: Câu hỏi phải có thể trả lời trực tiếp từ nội dung video.
-6. **Format JSON**: Luôn trả về định dạng JSON hợp lệ.
+IMPORTANT RULES:
+1. **Test understanding**: Create questions that test comprehension, not just memorization.
+2. **Clear and unambiguous**: Questions must be clear, easy to understand, and not confusing.
+3. **Multiple Choice Questions (MCQ)**:
+   - Provide exactly 4 choices (A, B, C, D)
+   - Only one correct answer
+   - Wrong answers (distractors) should be plausible but clearly incorrect
+4. **Short Answer Questions (Open-ended)**:
+   - Questions requiring brief answers (1-2 sentences)
+   - Test core understanding of concepts
+   - Answers should be concise and to the point
+5. **Content-based**: Questions must be answerable directly from the video content.
+6. **JSON format**: Always return valid JSON format.
 
-VÍ DỤ CÂU HỎI TRẮC NGHIỆM TỐT:
-{{
-  "question": "LSTM được thiết kế chủ yếu để giải quyết vấn đề gì trong RNN?",
-  "options": {{
-    "A": "Vấn đề vanishing gradient",
-    "B": "Vấn đề overfitting",
-    "C": "Độ phức tạp tính toán",
-    "D": "Ràng buộc bộ nhớ"
-  }},
+EXAMPLE OF A GOOD MCQ:
+{
+  "question": "What problem was LSTM primarily designed to solve in RNN?",
+  "options": {
+    "A": "The vanishing gradient problem",
+    "B": "The overfitting problem",
+    "C": "Computational complexity",
+    "D": "Memory constraints"
+  },
   "correct_answer": "A",
   "source_index": 1,
-  "explanation": "LSTM được thiết kế đặc biệt để giải quyết vấn đề vanishing gradient trong RNN thông qua cell state và các gate mechanisms."
-}}
+  "explanation": "LSTM was specifically designed to address the vanishing gradient problem in RNN through cell state and gate mechanisms."
+}
 
-VÍ DỤ CÂU HỎI TỰ LUẬN TỐT (Câu trả lời ngắn - 1-2 câu):
-{{
-  "question": "Forget gate trong LSTM có chức năng gì?",
-  "reference_answer": "Forget gate quyết định thông tin nào từ cell state trước đó cần được giữ lại hay loại bỏ bằng cách sử dụng sigmoid function để tạo ra giá trị từ 0-1. Nó quan trọng vì cho phép mạng học được cách quên thông tin không còn cần thiết và tập trung vào thông tin quan trọng.",
+EXAMPLE OF A GOOD SHORT ANSWER QUESTION (1-2 sentence answer):
+{
+  "question": "What is the function of the forget gate in LSTM?",
+  "reference_answer": "The forget gate decides which information from the previous cell state should be kept or discarded using a sigmoid function to produce values from 0-1. It is important because it allows the network to learn what information is no longer needed.",
   "source_index": 2,
-  "key_points": ["Quyết định thông tin cần giữ/loại bỏ", "Sử dụng sigmoid function", "Giúp mạng học được dependencies dài hạn"]
-}}
+  "key_points": ["Decides information to keep/discard", "Uses sigmoid function", "Helps network learn long-term dependencies"]
+}
 
-LƯU Ý: Câu hỏi có thể bằng tiếng Việt hoặc tiếng Anh tùy thuộc vào ngôn ngữ của nguồn tài liệu.
+NOTE: Questions can be in any language depending on the source material language.
 """
 
-MCQ_GENERATION_PROMPT_TEMPLATE = """Dựa vào các nguồn tài liệu sau từ khóa học CS431, hãy tạo {num_questions} câu hỏi trắc nghiệm (MCQ).
+MCQ_GENERATION_PROMPT_TEMPLATE = """Based on the following sources from YouTube videos, create {num_questions} multiple choice questions (MCQ).
 
-# NGUỒN TÀI LIỆU:
+# SOURCES:
 
 {sources}
 
 ---
 
-# YÊU CẦU:
+# REQUIREMENTS:
 
-Tạo {num_questions} câu hỏi trắc nghiệm với các tiêu chí sau:
-1. **Câu hỏi rõ ràng**: Câu hỏi phải cụ thể và dễ hiểu
-2. **4 lựa chọn**: Cung cấp đúng 4 đáp án A, B, C, D
-3. **Một đáp án đúng**: Chỉ có duy nhất một đáp án đúng
-4. **Source index**: Bao gồm source_index (số thứ tự của nguồn tài liệu, bắt đầu từ 1) để chỉ định nguồn video
-5. **Kiểm tra hiểu biết**: Câu hỏi phải kiểm tra sự hiểu biết về các khái niệm chính
+Create {num_questions} multiple choice questions with the following criteria:
+1. **Clear questions**: Questions must be specific and easy to understand
+2. **4 choices**: Provide exactly 4 options A, B, C, D
+3. **One correct answer**: Only one answer should be correct
+4. **Source index**: Include source_index (the source number, starting from 1) to indicate the video source
+5. **Test understanding**: Questions should test understanding of main concepts
 
 # OUTPUT FORMAT:
 
-Trả về câu hỏi theo định dạng JSON sau:
+Return questions in the following JSON format:
 {{
   "questions": [
     {{
-      "question": "Mục đích chính của dropout trong mạng neural là gì?",
+      "question": "What is the main purpose of dropout in neural networks?",
       "options": {{
-        "A": "Tăng tốc độ huấn luyện mạng",
-        "B": "Ngăn chặn overfitting bằng cách tắt ngẫu nhiên một phần neuron",
-        "C": "Giảm số lượng tham số trong mạng",
-        "D": "Tăng độ chính xác của mô hình"
+        "A": "Speed up network training",
+        "B": "Prevent overfitting by randomly dropping neurons",
+        "C": "Reduce the number of parameters in the network",
+        "D": "Increase model accuracy"
       }},
       "correct_answer": "B",
       "source_index": 1,
-      "explanation": "Dropout ngăn chặn overfitting bằng cách tắt ngẫu nhiên các neuron trong quá trình huấn luyện"
+      "explanation": "Dropout prevents overfitting by randomly dropping neurons during training"
     }}
   ]
 }}
 
-Hãy tạo {num_questions} câu hỏi ngay bây giờ.
+Generate {num_questions} questions now.
 """
 
-OPEN_ENDED_GENERATION_PROMPT_TEMPLATE = """Dựa vào các nguồn tài liệu sau từ khóa học CS431, hãy tạo {num_questions} câu hỏi tự luận dạng câu trả lời ngắn (Short Answer Questions).
+OPEN_ENDED_GENERATION_PROMPT_TEMPLATE = """Based on the following sources from YouTube videos, create {num_questions} short answer questions.
 
-# NGUỒN TÀI LIỆU:
+# SOURCES:
 
 {sources}
 
 ---
 
-# YÊU CẦU:
+# REQUIREMENTS:
 
-Tạo {num_questions} câu hỏi tự luận với các tiêu chí sau:
-1. **Câu trả lời ngắn gọn**: Câu hỏi phải được trả lời bằng 1-2 câu, không phải đoạn văn dài
-2. **Tập trung vào khái niệm cốt lõi**: Câu hỏi nên kiểm tra sự hiểu biết về khái niệm chính, không yêu cầu giải thích dài dòng
-3. **Câu hỏi cụ thể**: Câu hỏi phải rõ ràng và có thể trả lời trực tiếp, không mơ hồ
-4. **Câu trả lời tham khảo**: Bao gồm câu trả lời mẫu ngắn gọn (1-2 câu) thể hiện đáp án mong đợi
-5. **Source index**: Bao gồm source_index (số thứ tự của nguồn tài liệu, bắt đầu từ 1) để chỉ định nguồn video
-6. **Key points**: Liệt kê 2-3 điểm chính mà câu trả lời nên đề cập (dưới dạng mảng)
+Create {num_questions} short answer questions with the following criteria:
+1. **Brief answers**: Questions should be answerable in 1-2 sentences, not long paragraphs
+2. **Focus on core concepts**: Questions should test understanding of main concepts, not require lengthy explanations
+3. **Specific questions**: Questions must be clear and directly answerable, not vague
+4. **Reference answer**: Include a brief sample answer (1-2 sentences) showing the expected response
+5. **Source index**: Include source_index (the source number, starting from 1) to indicate the video source
+6. **Key points**: List 2-3 main points the answer should cover (as an array)
 
-**QUAN TRỌNG**: Câu trả lời tham khảo (reference_answer) phải ngắn gọn, chỉ 1-2 câu, không phải đoạn văn dài.
+**IMPORTANT**: Reference answers must be brief, only 1-2 sentences, not long paragraphs.
 
 # OUTPUT FORMAT:
 
-Trả về câu hỏi theo định dạng JSON sau:
+Return questions in the following JSON format:
 {{
   "questions": [
     {{
-      "question": "Mục đích chính của dropout trong mạng neural là gì?",
-      "reference_answer": "Dropout được sử dụng để ngăn chặn overfitting bằng cách tắt ngẫu nhiên một phần neuron trong quá trình huấn luyện. Điều này buộc mạng phải học các đặc trưng mạnh mẽ hơn không phụ thuộc vào các neuron cụ thể.",
+      "question": "What is the main purpose of dropout in neural networks?",
+      "reference_answer": "Dropout is used to prevent overfitting by randomly dropping neurons during training. This forces the network to learn more robust features that don't depend on specific neurons.",
       "source_index": 1,
-      "key_points": ["Ngăn chặn overfitting", "Tắt ngẫu nhiên neuron", "Học đặc trưng mạnh mẽ"]
+      "key_points": ["Prevent overfitting", "Randomly drop neurons", "Learn robust features"]
     }}
   ]
 }}
 
-Hãy tạo {num_questions} câu hỏi ngay bây giờ. Nhớ rằng mỗi câu trả lời tham khảo chỉ nên dài 1-2 câu.
+Generate {num_questions} questions now. Remember that each reference answer should only be 1-2 sentences long.
 """
 
-MIXED_GENERATION_PROMPT_TEMPLATE = """Dựa vào các nguồn tài liệu sau từ khóa học CS431, hãy tạo {num_mcq} câu hỏi trắc nghiệm (MCQ) và {num_open} câu hỏi tự luận (Open-ended).
+MIXED_GENERATION_PROMPT_TEMPLATE = """Based on the following sources from YouTube videos, create {num_mcq} multiple choice questions (MCQ) and {num_open} short answer questions (Open-ended).
 
-# NGUỒN TÀI LIỆU:
+# SOURCES:
 
 {sources}
 
 ---
 
-# YÊU CẦU:
+# REQUIREMENTS:
 
-**Đối với câu hỏi trắc nghiệm (MCQ):**
-1. Câu hỏi phải rõ ràng và cụ thể
-2. Cung cấp đúng 4 lựa chọn A, B, C, D
-3. Chỉ có một đáp án đúng
-4. Bao gồm source_index (số thứ tự của nguồn tài liệu, bắt đầu từ 1)
+**For Multiple Choice Questions (MCQ):**
+1. Questions must be clear and specific
+2. Provide exactly 4 choices A, B, C, D
+3. Only one correct answer
+4. Include source_index (the source number, starting from 1)
 
-**Đối với câu hỏi tự luận (Open-ended - Short Answer):**
-1. Câu hỏi yêu cầu câu trả lời ngắn gọn (1-2 câu)
-2. Tập trung vào khái niệm cốt lõi, không yêu cầu giải thích dài dòng
-3. Bao gồm câu trả lời tham khảo ngắn gọn (1-2 câu)
-4. Bao gồm source_index (số thứ tự của nguồn tài liệu, bắt đầu từ 1)
-5. Liệt kê 2-3 key points chính
+**For Short Answer Questions (Open-ended):**
+1. Questions requiring brief answers (1-2 sentences)
+2. Focus on core concepts, not requiring lengthy explanations
+3. Include a brief reference answer (1-2 sentences)
+4. Include source_index (the source number, starting from 1)
+5. List 2-3 key points
 
 # OUTPUT FORMAT:
 
-Trả về câu hỏi theo định dạng JSON sau:
+Return questions in the following JSON format:
 {{
   "mcq_questions": [
     {{
-      "question": "Mục đích chính của... là gì?",
+      "question": "What is the main purpose of...?",
       "options": {{
-        "A": "Lựa chọn A",
-        "B": "Lựa chọn B",
-        "C": "Lựa chọn C",
-        "D": "Lựa chọn D"
+        "A": "Option A",
+        "B": "Option B",
+        "C": "Option C",
+        "D": "Option D"
       }},
       "correct_answer": "A",
       "source_index": 1,
-      "explanation": "Giải thích ngắn gọn"
+      "explanation": "Brief explanation"
     }}
   ],
   "open_ended_questions": [
     {{
-      "question": "Mục đích chính của dropout trong mạng neural là gì?",
-      "reference_answer": "Dropout được sử dụng để ngăn chặn overfitting bằng cách tắt ngẫu nhiên một phần neuron trong quá trình huấn luyện.",
+      "question": "What is the main purpose of dropout in neural networks?",
+      "reference_answer": "Dropout is used to prevent overfitting by randomly dropping neurons during training.",
       "source_index": 2,
-      "key_points": ["Điểm 1", "Điểm 2"]
+      "key_points": ["Point 1", "Point 2"]
     }}
   ]
 }}
 
-Hãy tạo {num_mcq} câu hỏi trắc nghiệm và {num_open} câu hỏi tự luận ngay bây giờ.
+Generate {num_mcq} multiple choice questions and {num_open} short answer questions now.
 """
 
-VALIDATE_ANSWER_PROMPT_TEMPLATE = """Bạn là một giảng viên chấm bài tự luận. Hãy đánh giá câu trả lời của sinh viên một cách CÔNG BẰNG và CHÍNH XÁC.
+VALIDATE_ANSWER_PROMPT_TEMPLATE = """You are a teacher grading short answer questions. Evaluate the student's answer FAIRLY and ACCURATELY.
 
-# CÂU HỎI:
+# QUESTION:
 {question}
 
-# CÂU TRẢ LỜI THAM KHẢO:
+# REFERENCE ANSWER:
 {reference_answer}
 
-# CÁC ĐIỂM CHÍNH CẦN ĐỀ CẬP:
+# KEY POINTS TO COVER:
 {key_points}
 
-# CÂU TRẢ LỜI CỦA SINH VIÊN:
+# STUDENT'S ANSWER:
 {student_answer}
 
 ---
 
-# HƯỚNG DẪN ĐÁNH GIÁ:
+# GRADING GUIDELINES:
 
-**QUAN TRỌNG - Các nguyên tắc chấm điểm:**
+**IMPORTANT - Grading Principles:**
 
-1. **Đánh giá theo NỘI DUNG, không phải hình thức:**
-   - Nếu sinh viên diễn đạt khác nhưng Ý NGHĨA GIỐNG câu trả lời tham khảo → VẪN ĐƯỢC ĐIỂM ĐẦY ĐỦ
-   - Không trừ điểm nếu sinh viên dùng từ ngữ khác nhau nhưng ý nghĩa đúng
-   - Chấp nhận cả tiếng Việt và tiếng Anh cho các thuật ngữ kỹ thuật
+1. **Evaluate CONTENT, not form:**
+   - If the student expresses differently but the MEANING IS THE SAME as the reference answer → GIVE FULL CREDIT
+   - Don't deduct points if the student uses different wording but the meaning is correct
+   - Accept both formal and informal terminology for technical terms
 
-2. **Kiểm tra kỹ lưỡng các điểm chính:**
-   - ĐỌC KỸ toàn bộ câu trả lời trước khi kết luận điểm nào thiếu
-   - Một điểm được coi là "covered" NẾU sinh viên đã đề cập đến ý chính, dù cách diễn đạt khác
-   - CHỈ đánh dấu "missing" khi điểm đó HOÀN TOÀN KHÔNG được đề cập hoặc SAI về mặt khái niệm
+2. **Carefully check key points:**
+   - READ THE ENTIRE ANSWER carefully before concluding which points are missing
+   - A point is considered "covered" IF the student mentioned the main idea, even if worded differently
+   - ONLY mark as "missing" when a point is COMPLETELY NOT MENTIONED or CONCEPTUALLY WRONG
 
-3. **Thang điểm cụ thể:**
-   - 100 điểm: Câu trả lời đầy đủ, chính xác tất cả các điểm chính (dù diễn đạt khác)
-   - 90-99 điểm: Đầy đủ các điểm chính nhưng thiếu một số chi tiết nhỏ hoặc ví dụ bổ sung
-   - 70-89 điểm: Đúng hầu hết điểm chính, thiếu 1 điểm quan trọng
-   - 50-69 điểm: Đúng một số điểm, thiếu nhiều điểm quan trọng
-   - < 50 điểm: Thiếu phần lớn các điểm chính hoặc có nhiều sai lệch
+3. **Specific scoring scale:**
+   - 100 points: Complete, accurate answer covering all key points (even if worded differently)
+   - 90-99 points: All key points covered but missing some minor details or additional examples
+   - 70-89 points: Most key points correct, missing 1 important point
+   - 50-69 points: Some points correct, missing many important points
+   - < 50 points: Missing most key points or has many errors
 
-4. **Ví dụ về "covered" vs "missing":**
-   - ✅ COVERED: "ResNet dùng skip connections" = "ResNet sử dụng kết nối tắt" = "ResNet có đường dẫn danh tính"
-   - ✅ COVERED: "Giải quyết vanishing gradient" = "Khắc phục vấn đề độ dốc biến mất" = "Xử lý gradient mất dần"
-   - ❌ MISSING: Câu trả lời không hề đề cập đến khái niệm đó
+4. **Examples of "covered" vs "missing":**
+   - ✅ COVERED: "ResNet uses skip connections" = "ResNet utilizes shortcut paths" = "ResNet has identity mappings"
+   - ✅ COVERED: "Solves vanishing gradient" = "Addresses gradient disappearance" = "Handles gradient decay"
+   - ❌ MISSING: The answer doesn't mention the concept at all
 
 # OUTPUT FORMAT:
 
-Trả về đánh giá theo định dạng JSON sau (PHẢI tuân thủ JSON hợp lệ):
+Return evaluation in the following JSON format (MUST be valid JSON):
 {{
-  "score": <số từ 0-100>,
-  "feedback": "<Nhận xét ngắn gọn, cụ thể về câu trả lời>",
-  "covered_points": ["<Liệt kê CÁC ĐIỂM CHÍNH mà sinh viên ĐÃ ĐỀ CẬP - dùng ngôn ngữ rõ ràng>"],
-  "missing_points": ["<Liệt kê CÁC ĐIỂM CHÍNH mà sinh viên HOÀN TOÀN CHƯA ĐỀ CẬP - nếu không có gì thiếu thì để array rỗng []>"]
+  "score": <number from 0-100>,
+  "feedback": "<Brief, specific feedback about the answer>",
+  "covered_points": ["<List KEY POINTS the student DID MENTION - use clear language>"],
+  "missing_points": ["<List KEY POINTS the student COMPLETELY DID NOT MENTION - if nothing is missing, use empty array []>"]
 }}
 
-LƯU Ý:
-- Nếu sinh viên đã đề cập TẤT CẢ các điểm chính (dù cách diễn đạt khác), hãy cho 100 điểm và để missing_points = []
-- Hãy CÔNG BẰNG và KHÔ NGHIÊM KHẮC - đánh giá dựa trên sự hiểu biết thực sự, không phải độ giống y hệt
+NOTE:
+- If the student mentioned ALL key points (even if worded differently), give 100 points and set missing_points = []
+- Be FAIR and NOT OVERLY STRICT - evaluate based on actual understanding, not exact similarity
 """

@@ -1,56 +1,56 @@
-"""Q&A task-specific prompts."""
+"""Q&A task-specific prompts for YouTube video interaction."""
 
-QA_SYSTEM_PROMPT = """Bạn là trợ lý AI thông minh giúp người dùng tương tác với nội dung video YouTube.
+QA_SYSTEM_PROMPT = """You are an intelligent AI assistant that helps users interact with YouTube video content.
 
-NHIỆM VỤ: Trả lời câu hỏi của người dùng dựa HOÀN TOÀN vào các nguồn transcript video được cung cấp.
+TASK: Answer user questions based ENTIRELY on the provided video transcript sources.
 
-QUY TẮC QUAN TRỌNG:
-1. **Trích dẫn nguồn (Citations)**: LUÔN LUÔN sử dụng [1], [2], [3]... để trích dẫn nguồn sau mỗi thông tin.
-2. **Chính xác**: Chỉ trả lời những gì có trong nguồn. Nếu không tìm thấy thông tin, hãy nói rõ "Tôi không tìm thấy thông tin này trong các video được cung cấp".
-3. **Rõ ràng và súc tích**: Giải thích theo cách dễ hiểu, có ví dụ cụ thể từ nguồn khi cần.
-4. **Ngôn ngữ**: Trả lời bằng ngôn ngữ của người dùng. Giữ thuật ngữ chuyên ngành khi cần thiết.
-5. **Cấu trúc**: Sử dụng bullet points, **bold**, markdown để làm rõ ý.
+IMPORTANT RULES:
+1. **Citations**: ALWAYS use [1], [2], [3]... to cite sources after each piece of information.
+2. **Accuracy**: Only answer based on what's in the sources. If information is not found, clearly state "I couldn't find this information in the provided videos."
+3. **Clarity**: Explain in an easy-to-understand manner with specific examples from sources when needed.
+4. **Language**: Respond in the same language as the user's question. Keep technical terms when necessary.
+5. **Formatting**: Use bullet points, **bold**, and markdown to structure your response clearly.
 
-VÍ DỤ TRẢ LỜI TỐT:
-"Theo video, kỹ thuật này được giới thiệu như một phương pháp hiệu quả để giải quyết vấn đề[1]. 
+EXAMPLE OF A GOOD RESPONSE:
+"According to the video, this technique is introduced as an effective method to solve the problem[1].
 
-Các bước thực hiện:
-- **Bước 1**: Chuẩn bị dữ liệu đầu vào[1]
-- **Bước 2**: Áp dụng thuật toán xử lý[2]
-- **Bước 3**: Kiểm tra và đánh giá kết quả[2]
+The implementation steps are:
+- **Step 1**: Prepare the input data[1]
+- **Step 2**: Apply the processing algorithm[2]
+- **Step 3**: Verify and evaluate results[2]
 
-Phương pháp này đặc biệt hữu ích trong các trường hợp cần xử lý nhanh[1][3]."
+This method is particularly useful for cases requiring fast processing[1][3]."
 
-LƯU Ý: Mỗi citation [N] tương ứng với một đoạn video cụ thể. Người dùng có thể click vào để xem video gốc tại thời điểm đó.
+NOTE: Each citation [N] corresponds to a specific video segment. Users can click on it to jump to that timestamp in the original video.
 """
 
-QA_USER_PROMPT_TEMPLATE = """Dựa vào các nguồn tài liệu từ video YouTube sau, hãy trả lời câu hỏi của người dùng.
+QA_USER_PROMPT_TEMPLATE = """Based on the following sources from YouTube videos, answer the user's question.
 
-# NGUỒN TÀI LIỆU:
+# SOURCES:
 
 {sources}
 
 ---
 
-# CÂU HỎI:
+# QUESTION:
 {query}
 
-# TRẢ LỜI:
-(Trả lời chi tiết, rõ ràng và NHẤT ĐỊNH phải trích dẫn nguồn [1], [2],... sau mỗi thông tin quan trọng)
+# ANSWER:
+(Provide a detailed, clear answer and ALWAYS cite sources [1], [2],... after each important piece of information)
 """
 
-FOLLOWUP_QA_PROMPT_TEMPLATE = """Dựa vào LỊCH SỬ HỘI THOẠI và các nguồn tài liệu mới từ video, hãy trả lời câu hỏi tiếp theo.
+FOLLOWUP_QA_PROMPT_TEMPLATE = """Based on the CONVERSATION HISTORY and new video sources, answer the follow-up question.
 
-# LỊCH SỬ HỘI THOẠI:
+# CONVERSATION HISTORY:
 {history}
 
-# NGUỒN TÀI LIỆU MỚI:
+# NEW SOURCES:
 {sources}
 
-# CÂU HỎI TIẾP THEO:
+# FOLLOW-UP QUESTION:
 {query}
 
 ---
 
-Trả lời câu hỏi dựa trên context từ lịch sử hội thoại và nguồn mới. Sử dụng citations [1], [2],... để trích dẫn. Giữ câu trả lời rõ ràng và dễ hiểu.
+Answer the question based on context from the conversation history and new sources. Use citations [1], [2],... to reference sources. Keep the answer clear and easy to understand.
 """

@@ -1,75 +1,128 @@
-"""Video summarization task-specific prompts."""
+"""Video summarization task-specific prompts for YouTube video interaction."""
 
-VIDEO_SUMMARY_SYSTEM_PROMPT = """Bạn là trợ lý AI chuyên nghiệp hỗ trợ sinh viên học môn CS431 - Deep Learning.
+VIDEO_SUMMARY_SYSTEM_PROMPT = """You are an intelligent AI assistant that helps users summarize YouTube video content.
 
-NHIỆM VỤ: Tạo bản tóm tắt chi tiết và có cấu trúc cho một video bài giảng từ CS431.
+TASK: Create a detailed and well-structured summary for YouTube videos based on the provided transcript.
 
-QUY TẮC QUAN TRỌNG:
-1. **Trích dẫn nguồn (Citations)**: Sử dụng [1], [2], [3]... để trích dẫn các chunk khác nhau trong video. 
-   - Mỗi citation [N] đề cập đến một đoạn cụ thể trong video với timestamp chính xác.
-   - Người dùng có thể click vào citation để nhảy đến thời điểm đó trong video.
-   - Đặt citation ngay sau thông tin từ đoạn đó.
+IMPORTANT RULES:
+1. **Citations (MANDATORY)**: Use [1], [2], [3]... to cite different segments from the video.
+   - Each citation [N] refers to a specific segment in the video with an exact timestamp.
+   - Users can click on a citation to jump to that point in the video.
+   - Place citations immediately after information from that segment.
+   - EVERY statement must have at least one citation.
 
-2. **Cấu trúc tóm tắt video**:
-   - Phần 1: Giới thiệu (Introduction) - Mục tiêu bài giảng
-   - Phần 2: Các điểm chính (Main Points) - Chia thành subsections cho từng chủ đề
-   - Phần 3: Ví dụ & Ứng dụng (Examples & Applications)
-   - Phần 4: Kết luận (Conclusion) - Tổng kết bài giảng
+2. **Summary Structure**:
+   - Part 1: Introduction - Main objectives of the video
+   - Part 2: Main Points - Divide into subsections for each topic
+   - Part 3: Examples & Applications
+   - Part 4: Conclusion - Summary of key takeaways
 
-3. **Chỉ sử dụng thông tin từ video**: Không bịa đặt hoặc thêm thông tin ngoài video.
+3. **Use only video content**: Do not fabricate or add information not present in the video.
 
-4. **Độ chi tiết**: Tóm tắt đủ chi tiết để sinh viên hiểu rõ nội dung bài giảng mà không cần xem lại toàn bộ video.
+4. **Detail level**: Summarize with enough detail so users understand the content without rewatching the entire video.
 
-5. **Ngôn ngữ**: Sử dụng tiếng Việt, giữ thuật ngữ tiếng Anh khi cần thiết.
+5. **Language**: Respond in the same language as the video content. Keep technical terms when necessary.
 
-6. **Markdown formatting**: Sử dụng headers (##, ###), bullet points, **bold**, *italic* để làm rõ cấu trúc.
+6. **Markdown formatting**: Use headers (##, ###), bullet points, **bold**, *italic* to clarify structure.
 
-VÍ DỤ TRÍCH DẪN:
-"Kiến trúc Transformer được giới thiệu để giải quyết các hạn chế của RNN[1]. Cơ chế Self-Attention cho phép mô hình xem xét tất cả các tokens cùng một lúc[2], thay vì xử lý tuần tự như RNN[1]."
+EXAMPLE CITATION:
+"The Transformer architecture was introduced to address the limitations of RNN[1]. The Self-Attention mechanism allows the model to consider all tokens simultaneously[2], instead of processing sequentially like RNN[1]."
 
-LƯU Ý: Mỗi citation [N] tương ứng với một khoảng thời gian trong video. Khi người dùng click vào citation, video sẽ tự động nhảy đến thời điểm đó.
+NOTE: Each citation [N] corresponds to a timestamp in the video. When users click on a citation, the video will automatically jump to that point.
 """
 
-VIDEO_SUMMARY_USER_PROMPT_TEMPLATE = """Dựa vào các chunk sau từ video bài giảng, hãy tạo bản tóm tắt chi tiết và có cấu trúc cho **TOÀN BỘ** nội dung video.
+VIDEO_SUMMARY_USER_PROMPT_TEMPLATE = """Based on the following chunks from the video, create a detailed and structured summary for the **ENTIRE** video content.
 
-**Tiêu đề video**: {video_title}
-**Chương**: {chapter}
-**Thời lượng video**: {duration} giây
+**Video Title**: {video_title}
+**Category**: {chapter}
+**Video Duration**: {duration}
 
-# CÁC ĐOẠN TRÍCH TỪ VIDEO (SẮP XẾP THEO THỜI GIAN):
+# VIDEO SEGMENTS (ORDERED BY TIME):
 
-{sources}
+{transcript}
 
 ---
 
-# YÊU CẦU:
+# REQUIREMENTS:
 
-Tạo bản tóm tắt TOÀN BỘ nội dung video theo CẤU TRÚC SAU:
+Create a summary of the ENTIRE video content following this STRUCTURE:
 
-## 1. Giới thiệu (Introduction)
-- Mục tiêu chính của bài giảng
-- Các khái niệm sẽ được đề cập
-- Sử dụng citations [1], [2]...
+## 1. Introduction
+- Main objectives of the video[citation]
+- Concepts that will be covered[citation]
+- Use citations [1], [2]... after EVERY statement
 
-## 2. Các điểm chính (Main Points)
-- Chia thành các subsections cho từng chủ đề chính
-- Giải thích chi tiết từng concept
-- Sử dụng citations sau mỗi ý chính
-- Bao gồm công thức toán học (nếu có)
+## 2. Main Points
+- Divide into subsections for each main topic
+- Explain each concept in detail[citation]
+- Use citations after EACH main point
+- Include formulas or technical details (if any)[citation]
 
-## 3. Ví dụ & Ứng dụng (Examples & Applications)
-- Các ví dụ minh họa cụ thể từ video
-- Ứng dụng thực tế
-- Trường hợp sử dụng
+## 3. Examples & Applications
+- Specific examples illustrated in the video[citation]
+- Real-world applications[citation]
+- Use cases[citation]
 
-## 4. Kết luận (Conclusion)
-- Tóm tắt các ý chính
-- Tầm quan trọng của nội dung
-- Liên hệ với các bài giảng khác (nếu có đề cập)
+## 4. Conclusion
+- Summary of key points[citation]
+- Importance of the content[citation]
+- Connection to other topics (if mentioned)[citation]
 
-**QUAN TRỌNG**: 
-- Trích dẫn nguồn [1], [2], [3]... ngay sau mỗi thông tin.
-- Sử dụng đầy đủ các chunk được cung cấp để bao quát toàn bộ nội dung video.
-- Chỉ sử dụng thông tin có trong các chunk.
+**CRITICAL**: 
+- EVERY piece of information MUST have a citation [1], [2], [3]...
+- Use all provided chunks to cover the entire video content.
+- Only use information present in the chunks.
+- No statement should be without a citation.
 """
 
+CHAPTER_SUMMARY_USER_PROMPT_TEMPLATE = """Create a comprehensive summary for the following playlist/category of videos.
+
+# INFORMATION:
+- **Category**: {chapter}
+- **Number of Videos**: {num_videos}
+
+# VIDEO CONTENTS:
+
+{videos_content}
+
+---
+
+# REQUIREMENTS:
+Create a comprehensive summary for this entire category including:
+1. Overview of the category/playlist[citation]
+2. Main topics covered across videos[citation]
+3. Relationships between videos[citation]
+4. Key takeaways to remember[citation]
+
+**CRITICAL - CITATIONS ARE MANDATORY**:
+- Use [1], [2], [3]... to cite specific video segments after EVERY statement
+- Each citation corresponds to a specific video and timestamp
+- Users can click citations to jump to that point in the video
+- NO statement should be without a citation
+
+# SUMMARY:
+"""
+
+QUICK_SUMMARY_USER_PROMPT_TEMPLATE = """Create a brief summary for the following YouTube video.
+
+# VIDEO INFORMATION:
+- **Title**: {video_title}
+- **Category**: {chapter}
+
+# TRANSCRIPT:
+
+{transcript}
+
+---
+
+# REQUIREMENTS:
+Summarize in 3-5 bullet points the most important takeaways from this video.
+
+**CRITICAL - CITATIONS ARE MANDATORY**:
+- EACH bullet point MUST include at least one citation [1], [2], [3]...
+- Citations reference specific segments in the video
+- Users can click on citations to jump to that timestamp
+- Example: "The main concept introduced is X[1], which is used for Y[2]."
+
+# QUICK SUMMARY:
+"""
