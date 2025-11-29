@@ -1,72 +1,119 @@
-"""Quiz generation API endpoint with SSE streaming."""
+"""Quiz generation endpoint with SSE streaming."""
 
-import json
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, Query, HTTPException
 from fastapi.responses import StreamingResponse
 from pydantic import BaseModel
-from typing import List
+from typing import Optional, List
+import json
+import uuid
 
-from app.core.quiz.service import get_quiz_service
+from app.shared.database.postgres import get_db
+from app.models import QuizQuestion
 
 router = APIRouter(prefix="/api/quiz", tags=["quiz"])
 
 
-class GenerateQuizRequest(BaseModel):
-    """Request model for quiz generation."""
+# ============================================================================
+# Request/Response Models
+# ============================================================================
+
+class QuizGenerateRequest(BaseModel):
     video_ids: List[str]
-    question_type: str = "multiple choice"
+    question_type: str = "mcq"  # mcq, true_false, fill_blank
     num_questions: int = 5
+    difficulty: Optional[str] = "medium"  # easy, medium, hard
 
 
-def format_sse_event(event_type: str, data: dict) -> str:
-    """Format a dict as SSE event."""
-    data_str = json.dumps(data, ensure_ascii=False)
-    return f"event: {event_type}\ndata: {data_str}\n\n"
+class QuizSubmitRequest(BaseModel):
+    question_id: int
+    answer: str
 
+
+class QuestionResponse(BaseModel):
+    id: int
+    question_type: str
+    question: str
+    options: Optional[List[str]]
+    video_id: Optional[str]
+
+    class Config:
+        from_attributes = True
+
+
+class QuizResponse(BaseModel):
+    quiz_id: str
+    questions: List[QuestionResponse]
+    total_questions: int
+
+
+class AnswerResult(BaseModel):
+    correct: bool
+    correct_answer: str
+    explanation: Optional[str]
+
+
+# ============================================================================
+# SSE Helper
+# ============================================================================
+
+def format_sse(data: dict) -> str:
+    """Format data as SSE event."""
+    return f"data: {json.dumps(data, ensure_ascii=False)}\n\n"
+
+
+# ============================================================================
+# Endpoints
+# ============================================================================
 
 @router.post("/generate")
-async def generate_quiz(request: GenerateQuizRequest):
+async def generate_quiz(request: QuizGenerateRequest):
     """
-    Generate quiz for video(s) with streaming response.
+    Generate quiz questions with streaming response.
     
     Returns SSE stream with events:
-    - progress: Progress updates
-    - token: Streaming text tokens
-    - done: Completion event with quiz data
-    - error: Error event
+    - progress: Generation progress
+    - question: Individual question generated
+    - done: All questions with quiz_id
+    - error: Error message
     """
-    if request.num_questions < 1 or request.num_questions > 20:
-        raise HTTPException(
-            status_code=400,
-            detail="num_questions must be between 1 and 20"
-        )
+    # TODO: Implement with QuizService when ready
+    # For now, return a placeholder implementation
     
-    if not request.video_ids:
-        raise HTTPException(
-            status_code=400,
-            detail="At least one video_id is required"
-        )
+    quiz_id = str(uuid.uuid4())
     
-    service = get_quiz_service()
-    
-    async def generate():
+    async def event_generator():
         try:
-            async for event in service.generate_quiz_stream(
-                video_ids=request.video_ids,
-                question_type=request.question_type,
-                num_questions=request.num_questions
-            ):
-                event_type = event.get("type", "message")
-                yield format_sse_event(event_type, event)
+            # Placeholder: In production, this would use QuizService
+            yield format_sse({
+                "type": "progress",
+                "content": f"Generating {request.num_questions} questions..."
+            })
+            
+            # Generate placeholder questions
+            questions = []
+            for i in range(request.num_questions):
+                question = {
+                    "index": i + 1,
+                    "question_type": request.question_type,
+                    "question": f"Sample question {i + 1} about the video content?",
+                    "options": ["A) Option 1", "B) Option 2", "C) Option 3", "D) Option 4"] if request.question_type == "mcq" else None,
+                    "video_id": request.video_ids[0] if request.video_ids else None
+                }
+                questions.append(question)
+                yield format_sse({"type": "question", **question})
+            
+            yield format_sse({
+                "type": "done",
+                "quiz_id": quiz_id,
+                "questions": questions,
+                "total": len(questions)
+            })
+            
         except Exception as e:
-            error_event = {
-                "type": "error",
-                "content": f"Error generating quiz: {str(e)}"
-            }
-            yield format_sse_event("error", error_event)
+            yield format_sse({"type": "error", "content": str(e)})
     
     return StreamingResponse(
-        generate(),
+        event_generator(),
         media_type="text/event-stream",
         headers={
             "Cache-Control": "no-cache",
@@ -77,30 +124,74 @@ async def generate_quiz(request: GenerateQuizRequest):
 
 
 @router.get("/{quiz_id}")
-async def get_quiz(quiz_id: str):
-    """
-    Retrieve generated quiz by ID.
-    
-    Note: This is a placeholder. In a full implementation, quizzes would be
-    stored in the database and retrieved here.
-    """
-    # TODO: Implement quiz storage and retrieval
-    raise HTTPException(
-        status_code=501,
-        detail="Quiz storage and retrieval not yet implemented"
-    )
+def get_quiz(quiz_id: str):
+    """Retrieve a generated quiz by ID."""
+    with get_db() as db:
+        questions = db.query(QuizQuestion).filter(
+            QuizQuestion.session_id == quiz_id
+        ).all()
+        
+        if not questions:
+            raise HTTPException(
+                status_code=404,
+                detail=f"Quiz {quiz_id} not found"
+            )
+        
+        return QuizResponse(
+            quiz_id=quiz_id,
+            questions=[QuestionResponse.model_validate(q) for q in questions],
+            total_questions=len(questions)
+        )
 
 
-@router.post("/validate")
-async def validate_answers(request: dict):
-    """
-    Validate user answers for a quiz.
-    
-    Note: This is a placeholder. In a full implementation, this would
-    compare user answers with correct answers and return results.
-    """
-    # TODO: Implement answer validation
-    raise HTTPException(
-        status_code=501,
-        detail="Answer validation not yet implemented"
-    )
+@router.post("/submit", response_model=AnswerResult)
+def submit_answer(request: QuizSubmitRequest):
+    """Submit and validate a quiz answer."""
+    with get_db() as db:
+        question = db.query(QuizQuestion).filter(
+            QuizQuestion.id == request.question_id
+        ).first()
+        
+        if not question:
+            raise HTTPException(
+                status_code=404,
+                detail=f"Question {request.question_id} not found"
+            )
+        
+        is_correct = request.answer.upper() == question.correct_answer.upper()
+        
+        return AnswerResult(
+            correct=is_correct,
+            correct_answer=question.correct_answer,
+            explanation=question.explanation
+        )
+
+
+@router.get("/history")
+def get_quiz_history(
+    user_id: Optional[str] = Query(None),
+    limit: int = Query(20, ge=1, le=100)
+):
+    """Get quiz history for a user."""
+    with get_db() as db:
+        query = db.query(QuizQuestion)
+        
+        # Group by session_id to get unique quizzes
+        quiz_sessions = db.query(
+            QuizQuestion.session_id
+        ).distinct().limit(limit).all()
+        
+        quizzes = []
+        for (session_id,) in quiz_sessions:
+            questions = db.query(QuizQuestion).filter(
+                QuizQuestion.session_id == session_id
+            ).all()
+            
+            if questions:
+                quizzes.append({
+                    "quiz_id": session_id,
+                    "question_count": len(questions),
+                    "created_at": questions[0].created_at.isoformat()
+                })
+        
+        return {"quizzes": quizzes, "count": len(quizzes)}

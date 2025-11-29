@@ -87,3 +87,16 @@ class QuizQuestion(Base):
     correct_answer = Column(String, nullable=False)
     explanation = Column(Text, nullable=True)
     created_at = Column(DateTime, default=func.now(), nullable=False)
+
+
+class VideoSummary(Base):
+    """Video summary cache model."""
+    __tablename__ = "video_summaries"
+    
+    id = Column(String, primary_key=True)  # UUID
+    video_id = Column(String, ForeignKey("videos.id", ondelete="CASCADE"), nullable=False)
+    summary_type = Column(String, nullable=False)  # detailed, quick
+    content = Column(Text, nullable=False)  # Summary content
+    video_info = Column(JSON, nullable=True)  # Video metadata
+    created_at = Column(DateTime, default=func.now(), nullable=False)
+    updated_at = Column(DateTime, default=func.now(), onupdate=func.now(), nullable=False)

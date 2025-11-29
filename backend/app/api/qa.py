@@ -1,72 +1,101 @@
-"""Q&A API endpoint with SSE streaming."""
+"""Q&A endpoint with SSE streaming."""
 
-import json
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, Query, HTTPException
 from fastapi.responses import StreamingResponse
 from pydantic import BaseModel
 from typing import Optional, List
+import json
 
-from app.core.qa.service import get_qa_service
+from app.core.qa import get_qa_service
+from app.shared.database.postgres import get_db
+from app.models import ChatMessage
 
 router = APIRouter(prefix="/api/qa", tags=["qa"])
 
 
-class QARequest(BaseModel):
-    """Request model for Q&A."""
+# ============================================================================
+# Request/Response Models
+# ============================================================================
+
+class AskRequest(BaseModel):
     query: str
-    session_id: Optional[str] = None
     chapters: Optional[List[str]] = None
+    session_id: Optional[str] = None
 
 
 class FollowupRequest(BaseModel):
-    """Request model for followup question."""
-    query: str
     session_id: str
+    query: str
     chapters: Optional[List[str]] = None
 
 
-def format_sse_event(event_type: str, data: dict) -> str:
-    """Format a dict as SSE event."""
-    data_str = json.dumps(data, ensure_ascii=False)
-    return f"event: {event_type}\ndata: {data_str}\n\n"
+class SourceResponse(BaseModel):
+    index: int
+    video_id: str
+    video_title: str
+    video_url: str
+    chapter: str
+    start_time: int
+    end_time: int
+    text: str
+    score: float
 
+
+class MessageResponse(BaseModel):
+    id: int
+    role: str
+    content: str
+    sources: Optional[List[dict]]
+    created_at: str
+
+    class Config:
+        from_attributes = True
+
+
+# ============================================================================
+# SSE Helper
+# ============================================================================
+
+def format_sse(data: dict) -> str:
+    """Format data as SSE event."""
+    return f"data: {json.dumps(data, ensure_ascii=False)}\n\n"
+
+
+# ============================================================================
+# Endpoints
+# ============================================================================
 
 @router.post("/ask")
-async def ask_question(request: QARequest):
+async def ask_question(request: AskRequest):
     """
-    Ask a question and get streaming answer with sources.
+    Ask a question with streaming response.
     
     Returns SSE stream with events:
-    - token: Streaming text tokens
-    - sources: Source references
-    - done: Completion event with full response
-    - error: Error event
+    - token: Content tokens
+    - sources: Source citations
+    - done: Final response with session_id
+    - error: Error message
     """
     service = get_qa_service()
     
-    async def generate():
+    async def event_generator():
         try:
             async for event in service.answer(
                 query=request.query,
-                session_id=request.session_id,
-                chapters=request.chapters
+                chapters=request.chapters,
+                session_id=request.session_id
             ):
-                event_type = event.get("type", "message")
-                yield format_sse_event(event_type, event)
+                yield format_sse(event)
         except Exception as e:
-            error_event = {
-                "type": "error",
-                "content": f"Error processing question: {str(e)}"
-            }
-            yield format_sse_event("error", error_event)
+            yield format_sse({"type": "error", "content": str(e)})
     
     return StreamingResponse(
-        generate(),
+        event_generator(),
         media_type="text/event-stream",
         headers={
             "Cache-Control": "no-cache",
             "Connection": "keep-alive",
-            "X-Accel-Buffering": "no"  # Disable buffering for nginx
+            "X-Accel-Buffering": "no"
         }
     )
 
@@ -76,28 +105,29 @@ async def followup_question(request: FollowupRequest):
     """
     Ask a followup question in an existing session.
     
-    Returns SSE stream with events similar to /ask.
+    Returns SSE stream with events:
+    - token: Content tokens
+    - sources: Source citations
+    - done: Final response
+    - error: Error message
     """
     service = get_qa_service()
     
-    async def generate():
+    async def event_generator():
         try:
             async for event in service.followup(
                 session_id=request.session_id,
                 query=request.query,
                 chapters=request.chapters
             ):
-                event_type = event.get("type", "message")
-                yield format_sse_event(event_type, event)
+                yield format_sse(event)
+        except ValueError as e:
+            yield format_sse({"type": "error", "content": str(e)})
         except Exception as e:
-            error_event = {
-                "type": "error",
-                "content": f"Error processing followup: {str(e)}"
-            }
-            yield format_sse_event("error", error_event)
+            yield format_sse({"type": "error", "content": str(e)})
     
     return StreamingResponse(
-        generate(),
+        event_generator(),
         media_type="text/event-stream",
         headers={
             "Cache-Control": "no-cache",
@@ -108,31 +138,30 @@ async def followup_question(request: FollowupRequest):
 
 
 @router.get("/history/{session_id}")
-async def get_history(session_id: str):
+def get_history(session_id: str):
     """Get chat history for a session."""
-    from app.shared.database.postgres import get_postgres_client
-    from app.models import ChatMessage
-    
-    postgres = get_postgres_client()
-    
-    try:
-        with postgres.session_scope() as session:
-            messages = session.query(ChatMessage).filter_by(
-                session_id=session_id
-            ).order_by(ChatMessage.created_at).all()
-            
-            return {
-                "session_id": session_id,
-                "messages": [
-                    {
-                        "id": msg.id,
-                        "role": msg.role,
-                        "content": msg.content,
-                        "sources": msg.sources,
-                        "created_at": msg.created_at.isoformat() if msg.created_at else None
-                    }
-                    for msg in messages
-                ]
-            }
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Error fetching history: {str(e)}")
+    with get_db() as db:
+        messages = db.query(ChatMessage).filter(
+            ChatMessage.session_id == session_id
+        ).order_by(ChatMessage.created_at).all()
+        
+        if not messages:
+            raise HTTPException(
+                status_code=404, 
+                detail=f"No history found for session {session_id}"
+            )
+        
+        return {
+            "session_id": session_id,
+            "messages": [
+                {
+                    "id": m.id,
+                    "role": m.role,
+                    "content": m.content,
+                    "sources": m.sources,
+                    "created_at": m.created_at.isoformat()
+                }
+                for m in messages
+            ],
+            "count": len(messages)
+        }
