@@ -7,7 +7,7 @@ from datetime import datetime
 from ...shared.rag.retriever import RAGRetriever, get_rag_retriever
 from ...shared.llm.client import LLMClient, get_llm_client
 from ...shared.database.postgres import PostgresClient, get_postgres_client
-from ...shared.database.models import ChatSession, ChatMessage, VideoSummary
+from ...models import ChatSession, ChatMessage
 
 from .prompts import (
     VIDEO_SUMMARY_SYSTEM_PROMPT,
@@ -111,15 +111,14 @@ class VideoSummaryService:
         if summary_type == "quick":
             prompt = QUICK_SUMMARY_USER_PROMPT_TEMPLATE.format(
                 video_title=video_info["title"],
-                chapter=video_info["chapter"],
                 transcript=transcript
             )
         else:
+            # For detailed summary, use sources format
             prompt = VIDEO_SUMMARY_USER_PROMPT_TEMPLATE.format(
                 video_title=video_info["title"],
-                chapter=video_info["chapter"],
                 duration=video_info["duration"],
-                transcript=transcript
+                sources=transcript  # Use transcript as sources
             )
         
         # Step 5: Stream LLM response
@@ -277,7 +276,6 @@ class VideoSummaryService:
         return {
             "video_id": metadata.get("video_id", ""),
             "title": metadata.get("video_title", "Unknown"),
-            "chapter": metadata.get("chapter", ""),
             "video_url": metadata.get("video_url", ""),
             "duration": duration_str,
             "duration_seconds": duration_secs,
@@ -355,17 +353,8 @@ class VideoSummaryService:
         summary_type: str
     ) -> Optional[Dict[str, Any]]:
         """Get cached summary from database if exists."""
-        with self.postgres.session_scope() as session:
-            cached = session.query(VideoSummary).filter_by(
-                video_id=video_id,
-                summary_type=summary_type
-            ).first()
-            
-            if cached:
-                return {
-                    "content": cached.content,
-                    "video_info": cached.video_info
-                }
+        # TODO: Implement caching if needed
+        # For now, return None to always regenerate
         return None
     
     async def _create_or_get_session(
@@ -412,28 +401,10 @@ class VideoSummaryService:
         session_id: str
     ):
         """Save video summary to database."""
+        from ...models import ChatMessage
+        
         with self.postgres.session_scope() as session:
-            # Save to VideoSummary table (cache)
-            existing = session.query(VideoSummary).filter_by(
-                video_id=video_id,
-                summary_type=summary_type
-            ).first()
-            
-            if existing:
-                existing.content = summary
-                existing.video_info = video_info
-                existing.updated_at = datetime.utcnow()
-            else:
-                video_summary = VideoSummary(
-                    id=str(uuid.uuid4()),
-                    video_id=video_id,
-                    video_info=video_info,
-                    content=summary,
-                    summary_type=summary_type
-                )
-                session.add(video_summary)
-            
-            # Also save to chat messages for history
+            # Save to chat messages for history
             assistant_message = ChatMessage(
                 id=str(uuid.uuid4()),
                 session_id=session_id,

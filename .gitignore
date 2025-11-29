@@ -43,3 +43,7 @@ dist/
 *.swp
 *.swo
 .DS_Store
+
+# Database folders
+postgres_data/
+qdrant_data/

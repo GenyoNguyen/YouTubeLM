@@ -8,7 +8,7 @@ from ...shared.rag.retriever import RAGRetriever, get_rag_retriever
 from ...shared.rag.reranker import LocalReranker, get_local_reranker
 from ...shared.llm.client import LLMClient, get_llm_client
 from ...shared.database.postgres import PostgresClient, get_postgres_client
-from ...shared.database.models import ChatSession, ChatMessage
+from ...models import ChatSession, ChatMessage
 
 from .prompts import (
     QA_SYSTEM_PROMPT,
@@ -297,7 +297,8 @@ class QAService:
         sources: List[Dict[str, Any]],
         session_id: str
     ):
-        """Save user and assistant messages to existing session."""
+        """Save user query and assistant response to database."""
+        from ...models import ChatMessage
         with self.postgres.session_scope() as session:
             # Save user message
             user_message = ChatMessage(

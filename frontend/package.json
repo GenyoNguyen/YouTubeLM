@@ -1,4 +1,12 @@
 {
+<<<<<<< HEAD
+    "name": "youtubelm-frontend",
+    "version": "0.1.0",
+    "private": true,
+    "dependencies": {},
+    "devDependencies": {}
+}
+=======
   "name": "youtubelm-frontend",
   "version": "0.1.0",
   "private": true,
@@ -32,3 +40,4 @@
     "vite": "^7.2.4"
   }
 }
+>>>>>>> refs/remotes/origin/master

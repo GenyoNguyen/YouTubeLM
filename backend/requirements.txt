@@ -1,9 +1,13 @@
 # Python dependencies
 fastapi
-uvicorn
+uvicorn[standard]
 sqlalchemy
 alembic
 psycopg2-binary
 qdrant-client
-openai
 python-dotenv
+yt-dlp
+groq
+pydantic
+sentence-transformers
+torch
