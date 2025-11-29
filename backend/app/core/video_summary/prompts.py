@@ -1,85 +1,75 @@
 """Video summarization task-specific prompts."""
 
-VIDEO_SUMMARY_SYSTEM_PROMPT = """Bạn là trợ lý AI thông minh giúp người dùng tóm tắt nội dung video YouTube.
+VIDEO_SUMMARY_SYSTEM_PROMPT = """Bạn là trợ lý AI chuyên nghiệp hỗ trợ sinh viên học môn CS431 - Deep Learning.
 
-NHIỆM VỤ: Tóm tắt nội dung video dựa trên transcript được cung cấp.
+NHIỆM VỤ: Tạo bản tóm tắt chi tiết và có cấu trúc cho một video bài giảng từ CS431.
 
 QUY TẮC QUAN TRỌNG:
-1. **Toàn diện**: Nắm bắt tất cả các điểm quan trọng trong video, không bỏ sót ý chính.
-2. **Cấu trúc rõ ràng**: Tổ chức bản tóm tắt theo các phần/chủ đề chính trong video.
-3. **Súc tích**: Tóm tắt ngắn gọn nhưng đầy đủ ý nghĩa, tránh lặp lại.
-4. **Ngôn ngữ**: Sử dụng ngôn ngữ phù hợp với nội dung video. Giữ thuật ngữ chuyên ngành khi cần thiết.
-5. **Định dạng**: Sử dụng bullet points, **bold**, markdown để làm rõ ý.
-6. **Timestamps**: Đề cập khoảng thời gian khi cần thiết để người dùng có thể tìm kiếm nhanh.
+1. **Trích dẫn nguồn (Citations)**: Sử dụng [1], [2], [3]... để trích dẫn các chunk khác nhau trong video. 
+   - Mỗi citation [N] đề cập đến một đoạn cụ thể trong video với timestamp chính xác.
+   - Người dùng có thể click vào citation để nhảy đến thời điểm đó trong video.
+   - Đặt citation ngay sau thông tin từ đoạn đó.
 
-CẤU TRÚC TÓM TẮT:
-1. **Tổng quan**: 2-3 câu mô tả nội dung chính của video
-2. **Các điểm chính**: Liệt kê các khái niệm/chủ đề quan trọng
-3. **Chi tiết từng phần**: Giải thích ngắn gọn từng điểm chính
-4. **Kết luận**: Tóm tắt những điều quan trọng cần nhớ
+2. **Cấu trúc tóm tắt video**:
+   - Phần 1: Giới thiệu (Introduction) - Mục tiêu bài giảng
+   - Phần 2: Các điểm chính (Main Points) - Chia thành subsections cho từng chủ đề
+   - Phần 3: Ví dụ & Ứng dụng (Examples & Applications)
+   - Phần 4: Kết luận (Conclusion) - Tổng kết bài giảng
 
-LƯU Ý: Bản tóm tắt nên giúp người dùng nắm được toàn bộ nội dung video mà không cần xem lại từ đầu.
+3. **Chỉ sử dụng thông tin từ video**: Không bịa đặt hoặc thêm thông tin ngoài video.
+
+4. **Độ chi tiết**: Tóm tắt đủ chi tiết để sinh viên hiểu rõ nội dung bài giảng mà không cần xem lại toàn bộ video.
+
+5. **Ngôn ngữ**: Sử dụng tiếng Việt, giữ thuật ngữ tiếng Anh khi cần thiết.
+
+6. **Markdown formatting**: Sử dụng headers (##, ###), bullet points, **bold**, *italic* để làm rõ cấu trúc.
+
+VÍ DỤ TRÍCH DẪN:
+"Kiến trúc Transformer được giới thiệu để giải quyết các hạn chế của RNN[1]. Cơ chế Self-Attention cho phép mô hình xem xét tất cả các tokens cùng một lúc[2], thay vì xử lý tuần tự như RNN[1]."
+
+LƯU Ý: Mỗi citation [N] tương ứng với một khoảng thời gian trong video. Khi người dùng click vào citation, video sẽ tự động nhảy đến thời điểm đó.
 """
 
-VIDEO_SUMMARY_USER_PROMPT_TEMPLATE = """Hãy tóm tắt nội dung video YouTube sau.
+VIDEO_SUMMARY_USER_PROMPT_TEMPLATE = """Dựa vào các chunk sau từ video bài giảng, hãy tạo bản tóm tắt chi tiết và có cấu trúc cho **TOÀN BỘ** nội dung video.
 
-# THÔNG TIN VIDEO:
-- **Tiêu đề**: {video_title}
-- **Danh mục**: {chapter}
-- **Thời lượng**: {duration}
+**Tiêu đề video**: {video_title}
+**Chương**: {chapter}
+**Thời lượng video**: {duration} giây
 
-# TRANSCRIPT VIDEO:
+# CÁC ĐOẠN TRÍCH TỪ VIDEO (SẮP XẾP THEO THỜI GIAN):
 
-{transcript}
+{sources}
 
 ---
 
 # YÊU CẦU:
-Tạo bản tóm tắt chi tiết và có cấu trúc cho video này. Bao gồm:
-1. Tổng quan ngắn gọn (2-3 câu)
-2. Các điểm chính được trình bày
-3. Giải thích chi tiết từng điểm
-4. Những điều quan trọng cần nhớ
 
-# TÓM TẮT:
+Tạo bản tóm tắt TOÀN BỘ nội dung video theo CẤU TRÚC SAU:
+
+## 1. Giới thiệu (Introduction)
+- Mục tiêu chính của bài giảng
+- Các khái niệm sẽ được đề cập
+- Sử dụng citations [1], [2]...
+
+## 2. Các điểm chính (Main Points)
+- Chia thành các subsections cho từng chủ đề chính
+- Giải thích chi tiết từng concept
+- Sử dụng citations sau mỗi ý chính
+- Bao gồm công thức toán học (nếu có)
+
+## 3. Ví dụ & Ứng dụng (Examples & Applications)
+- Các ví dụ minh họa cụ thể từ video
+- Ứng dụng thực tế
+- Trường hợp sử dụng
+
+## 4. Kết luận (Conclusion)
+- Tóm tắt các ý chính
+- Tầm quan trọng của nội dung
+- Liên hệ với các bài giảng khác (nếu có đề cập)
+
+**QUAN TRỌNG**: 
+- Trích dẫn nguồn [1], [2], [3]... ngay sau mỗi thông tin.
+- Sử dụng đầy đủ các chunk được cung cấp để bao quát toàn bộ nội dung video.
+- Chỉ sử dụng thông tin có trong các chunk.
 """
 
-CHAPTER_SUMMARY_USER_PROMPT_TEMPLATE = """Hãy tóm tắt tổng hợp nội dung của playlist/danh mục video sau.
-
-# THÔNG TIN:
-- **Danh mục**: {chapter}
-- **Số video**: {num_videos}
-
-# NỘI DUNG CÁC VIDEO:
-
-{videos_content}
-
----
-
-# YÊU CẦU:
-Tạo bản tóm tắt tổng hợp cho toàn bộ danh mục này. Bao gồm:
-1. Tổng quan về danh mục/playlist
-2. Các chủ đề chính được đề cập
-3. Mối liên hệ giữa các video
-4. Điểm quan trọng cần nắm vững
-
-# TÓM TẮT:
-"""
-
-QUICK_SUMMARY_USER_PROMPT_TEMPLATE = """Hãy tạo bản tóm tắt ngắn gọn cho video YouTube sau.
-
-# THÔNG TIN VIDEO:
-- **Tiêu đề**: {video_title}
-- **Danh mục**: {chapter}
-
-# TRANSCRIPT:
-
-{transcript}
-
----
-
-# YÊU CẦU:
-Tóm tắt trong 3-5 bullet points những điểm quan trọng nhất của video này.
-
-# TÓM TẮT NHANH:
-"""
