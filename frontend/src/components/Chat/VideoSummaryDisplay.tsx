@@ -2,7 +2,6 @@
  * VideoSummaryDisplay component - displays video summary spanning full width
  */
 import React, { useEffect, useRef } from 'react';
-import { VStack, Box, Spinner, Text, Link, Button, HStack, useColorModeValue } from '@chakra-ui/react';
 import ReactMarkdown from 'react-markdown';
 import { ChatMessage, SourceReference } from '../../types';
 import { SourcesModal } from './SourcesModal';
@@ -22,12 +21,6 @@ export const VideoSummaryDisplay: React.FC<VideoSummaryDisplayProps> = ({
 }) => {
   const contentEndRef = useRef<HTMLDivElement>(null);
   const [isSourcesModalOpen, setIsSourcesModalOpen] = React.useState(false);
-
-  // Color mode values
-  const bgColor = useColorModeValue('white', 'gray.800');
-  const textColor = useColorModeValue('gray.800', 'white');
-  const loadingTextColor = useColorModeValue('gray.600', 'gray.300');
-  const citationColor = useColorModeValue('blue.500', 'blue.300');
 
   // Auto-scroll to bottom when content changes
   useEffect(() => {
@@ -67,17 +60,13 @@ export const VideoSummaryDisplay: React.FC<VideoSummaryDisplayProps> = ({
       // Add clickable citation
       const citationIndex = parseInt(match[1]);
       parts.push(
-        <Link
+        <button
           key={`citation-${match.index}`}
-          color={citationColor}
-          fontWeight="bold"
-          cursor="pointer"
+          className="text-blue-500 dark:text-blue-300 font-bold cursor-pointer hover:underline inline"
           onClick={() => handleCitationClick(citationIndex, sources)}
-          _hover={{ textDecoration: 'underline' }}
-          display="inline"
         >
           [{citationIndex}]
-        </Link>
+        </button>
       );
 
       lastIndex = match.index + match[0].length;
@@ -95,9 +84,9 @@ export const VideoSummaryDisplay: React.FC<VideoSummaryDisplayProps> = ({
   const renderContentWithCitations = (content: string, sources?: SourceReference[]) => {
     if (!sources || sources.length === 0) {
       return (
-        <Box className="markdown-content">
+        <div className="markdown-content">
           <ReactMarkdown>{content}</ReactMarkdown>
-        </Box>
+        </div>
       );
     }
 
@@ -124,74 +113,104 @@ export const VideoSummaryDisplay: React.FC<VideoSummaryDisplayProps> = ({
     };
 
     return (
-      <Box className="markdown-content">
+      <div className="markdown-content">
         <ReactMarkdown components={components}>{content}</ReactMarkdown>
-      </Box>
+      </div>
     );
   };
 
   // Get the latest summary message (last assistant message)
-  const summaryMessage = messages.length > 0 ? messages[messages.length - 1] : null;
+  const summaryMessage =
+    messages.length > 0 ? messages[messages.length - 1] : null;
 
   return (
     <>
-      <Box
-        flex={1}
-        w="full"
-        h="full"
-        overflowY="auto"
-        overflowX="hidden"
-        p={6}
-        bg={bgColor}
-        color={textColor}
-      >
-        <VStack spacing={4} align="stretch" w="full">
+      <div className="flex-1 w-full h-full overflow-y-auto overflow-x-hidden p-6 bg-white dark:bg-gray-800 text-gray-800 dark:text-white">
+        <div className="space-y-4 flex flex-col w-full">
           {/* Display completed summary */}
           {summaryMessage && summaryMessage.role === 'assistant' && (
             <>
-              {renderContentWithCitations(summaryMessage.content, summaryMessage.sources)}
+              {renderContentWithCitations(
+                summaryMessage.content,
+                summaryMessage.sources
+              )}
 
               {/* Show sources button if available */}
               {summaryMessage.sources && summaryMessage.sources.length > 0 && (
-                <HStack spacing={2} mt={4}>
-                  <Button
-                    size="sm"
-                    colorScheme="green"
-                    variant="solid"
+                <div className="flex gap-2 mt-4">
+                  <button
                     onClick={() => setIsSourcesModalOpen(true)}
-                    fontSize="xs"
-                    height="28px"
-                    px={4}
+                    className="bg-green-600 hover:bg-green-700 text-white text-xs h-7 px-4 rounded transition-colors"
                   >
                     {summaryMessage.sources.length} nguồn
-                  </Button>
-                </HStack>
+                  </button>
+                </div>
               )}
             </>
           )}
 
           {/* Show loading indicator when streaming starts (before first token) */}
           {isStreaming && !streamingContent && (
-            <Box display="flex" alignItems="center" gap={2}>
-              <Spinner size="sm" color="blue.500" />
-              <Text fontSize="sm" color={loadingTextColor}>Generating summary...</Text>
-            </Box>
+            <div className="flex items-center gap-2">
+              <svg
+                className="animate-spin h-4 w-4 text-blue-500"
+                xmlns="http://www.w3.org/2000/svg"
+                fill="none"
+                viewBox="0 0 24 24"
+              >
+                <circle
+                  className="opacity-25"
+                  cx="12"
+                  cy="12"
+                  r="10"
+                  stroke="currentColor"
+                  strokeWidth="4"
+                ></circle>
+                <path
+                  className="opacity-75"
+                  fill="currentColor"
+                  d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"
+                ></path>
+              </svg>
+              <span className="text-sm text-gray-600 dark:text-gray-300">
+                Generating summary...
+              </span>
+            </div>
           )}
 
           {/* Show streaming content */}
           {isStreaming && streamingContent && (
-            <Box>
-              <Text whiteSpace="pre-wrap" className="markdown-content">
+            <div>
+              <div className="whitespace-pre-wrap markdown-content">
                 {streamingContent}
-              </Text>
-              <Spinner size="sm" mt={2} color="blue.500" />
-            </Box>
+              </div>
+              <svg
+                className="animate-spin h-4 w-4 text-blue-500 mt-2"
+                xmlns="http://www.w3.org/2000/svg"
+                fill="none"
+                viewBox="0 0 24 24"
+              >
+                <circle
+                  className="opacity-25"
+                  cx="12"
+                  cy="12"
+                  r="10"
+                  stroke="currentColor"
+                  strokeWidth="4"
+                ></circle>
+                <path
+                  className="opacity-75"
+                  fill="currentColor"
+                  d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"
+                ></path>
+              </svg>
+            </div>
           )}
 
           {/* Scroll anchor */}
           <div ref={contentEndRef} />
-        </VStack>
-      </Box>
+        </div>
+      </div>
 
       {/* Sources Modal */}
       {summaryMessage?.sources && summaryMessage.sources.length > 0 && (

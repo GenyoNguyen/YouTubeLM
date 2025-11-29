@@ -5,7 +5,6 @@
 import { useNavigate } from "react-router-dom";
 import { TaskType } from "../types";
 import { useChatStore } from "../stores/chatStore";
-import textSumImage from "../assets/images/tiepLM_text_sum-circular.png";
 import qaImage from "../assets/images/tiepLM_qa-circular.png";
 import vidSumImage from "../assets/images/tiepLM_vid_sum-circular.png";
 import quizImage from "../assets/images/tiepLM_quiz-circular.png";
@@ -14,13 +13,6 @@ const TASK_INFO: Record<
   TaskType,
   { title: string; description: string; color: string; image: string }
 > = {
-  text_summary: {
-    title: "Text Summary",
-    description:
-      "Generate hierarchical summaries from video transcripts with inline citations and source references.",
-    color: "blue",
-    image: '',
-  },
   qa: {
     title: "Q&A",
     description:

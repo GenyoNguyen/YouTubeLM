@@ -1,260 +1,257 @@
 /**
- * API Client for YouTubeLM Backend
- * Supports REST endpoints and SSE (Server-Sent Events) for streaming
+ * API service for backend communication
  */
+import axios from 'axios';
+import {
+  ChatSession,
+  ChatMessage,
+  QuizQuestion,
+} from '../types';
 
-// Base URL - use environment variable or default to localhost
 const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:8000';
 
-// ============================================================================
-// Types
-// ============================================================================
-
-export interface VideoInfo {
-  video_id: string;
-  title: string;
-  chapter: string;
-  video_url: string;
-  duration: string;
-  duration_seconds: number;
-}
-
-export interface Source {
-  index: number;
-  video_id: string;
-  video_title: string;
-  video_url: string;
-  start_time: number;
-  end_time: number;
-  text: string;
-  score: number;
-}
-
-export interface ChatMessage {
-  id: string;
-  role: 'user' | 'assistant';
-  content: string;
-  sources?: Source[];
-  created_at: string;
-}
-
-export interface ChatSession {
-  id: string;
-  task_type: 'qa' | 'video_summary' | 'quiz';
-  title: string;
-  created_at: string;
-  updated_at: string;
-}
-
-export interface SSEEvent {
-  type: 'token' | 'sources' | 'metadata' | 'done' | 'error' | 'cached';
-  content?: string;
-  sources?: Source[];
-  video_info?: VideoInfo;
-  session_id?: string;
-  error?: string;
-}
+// Axios instance
+const apiClient = axios.create({
+  baseURL: API_BASE_URL,
+  headers: {
+    'Content-Type': 'application/json; charset=utf-8',
+  },
+  responseType: 'json',
+});
 
 // ============================================================================
-// Helper Functions
+// Universal Session API (used by all tasks)
 // ============================================================================
 
-async function fetchAPI<T>(
-  endpoint: string,
-  options?: RequestInit
-): Promise<T> {
-  const response = await fetch(`${API_BASE_URL}${endpoint}`, {
-    headers: {
-      'Content-Type': 'application/json',
-      ...options?.headers,
-    },
-    ...options,
-  });
-
-  if (!response.ok) {
-    const error = await response.json().catch(() => ({ detail: 'Unknown error' }));
-    throw new Error(error.detail || `HTTP ${response.status}`);
-  }
-
-  return response.json();
-}
-
-/**
- * Stream SSE events from backend
- */
-async function* streamSSE(
-  endpoint: string,
-  body: Record<string, unknown>
-): AsyncGenerator<SSEEvent> {
-  const response = await fetch(`${API_BASE_URL}${endpoint}`, {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-      'Accept': 'text/event-stream',
-    },
-    body: JSON.stringify(body),
-  });
-
-  if (!response.ok) {
-    throw new Error(`HTTP ${response.status}`);
-  }
-
-  const reader = response.body?.getReader();
-  if (!reader) throw new Error('No response body');
-
-  const decoder = new TextDecoder();
-  let buffer = '';
-
-  while (true) {
-    const { done, value } = await reader.read();
-    if (done) break;
-
-    buffer += decoder.decode(value, { stream: true });
-    const lines = buffer.split('\n');
-    buffer = lines.pop() || '';
-
-    for (const line of lines) {
-      if (line.startsWith('data: ')) {
-        try {
-          const data = JSON.parse(line.slice(6));
-          yield data as SSEEvent;
-        } catch {
-          // Skip invalid JSON
-        }
+export const sessionsAPI = {
+  /**
+   * Get all sessions for a user, optionally filtered by task type
+   */
+  getSessions: async (
+    userId: string = 'default_user',
+    taskType?: string
+  ): Promise<ChatSession[]> => {
+    const response = await apiClient.get<ChatSession[]>('/api/sessions', {
+      params: {
+        user_id: userId,
+        ...(taskType && { task_type: taskType })
       }
-    }
-  }
-}
-
-// ============================================================================
-// API Client
-// ============================================================================
-
-export const apiClient = {
-  // ==========================================================================
-  // Health Check
-  // ==========================================================================
-  
-  health: {
-    check: () => fetchAPI<{ status: string }>('/api/health'),
+    });
+    return response.data;
   },
 
-  // ==========================================================================
-  // Q&A Endpoints
-  // ==========================================================================
-  
-  qa: {
-    /**
-     * Ask a question with streaming response
-     */
-    ask: (params: {
-      query: string;
-      chapters?: string[];
-      session_id?: string;
-    }) => streamSSE('/api/qa/ask', params),
-
-    /**
-     * Followup question in existing session
-     */
-    followup: (params: {
-      session_id: string;
-      query: string;
-      chapters?: string[];
-    }) => streamSSE('/api/qa/followup', params),
-
-    /**
-     * Get chat history for a session
-     */
-    getHistory: (sessionId: string) =>
-      fetchAPI<ChatMessage[]>(`/api/qa/history/${sessionId}`),
+  /**
+   * Get messages in a session
+   */
+  getSessionMessages: async (sessionId: string): Promise<ChatMessage[]> => {
+    const response = await apiClient.get<ChatMessage[]>(
+      `/api/sessions/${sessionId}/messages`
+    );
+    return response.data;
   },
 
-  // ==========================================================================
-  // Video Summary Endpoints
-  // ==========================================================================
-  
-  videoSummary: {
-    /**
-     * Summarize a video with streaming response
-     */
-    summarize: (params: {
-      video_id: string;
-      summary_type?: 'detailed' | 'quick';
-      session_id?: string;
-      force_regenerate?: boolean;
-    }) => streamSSE('/api/video-summary/summarize', params),
-
-    /**
-     * Summarize a chapter/playlist
-     */
-    summarizeChapter: (params: {
-      chapter: string;
-      session_id?: string;
-    }) => streamSSE('/api/video-summary/summarize-chapter', params),
-
-    /**
-     * List available videos
-     */
-    listVideos: (chapter?: string) =>
-      fetchAPI<VideoInfo[]>(`/api/video-summary/videos${chapter ? `?chapter=${chapter}` : ''}`),
-
-    /**
-     * List available chapters
-     */
-    listChapters: () =>
-      fetchAPI<{ name: string; video_count: number }[]>('/api/video-summary/chapters'),
-  },
-
-  // ==========================================================================
-  // Quiz Endpoints
-  // ==========================================================================
-  
-  quiz: {
-    /**
-     * Generate quiz questions
-     */
-    generate: (params: {
-      video_ids: string[];
-      question_type: 'mcq' | 'true_false' | 'fill_blank';
-      num_questions: number;
-      difficulty?: 'easy' | 'medium' | 'hard';
-    }) => streamSSE('/api/quiz/generate', params),
-
-    /**
-     * Submit quiz answer
-     */
-    submitAnswer: (params: {
-      question_id: string;
-      answer: string;
-    }) => fetchAPI<{ correct: boolean; explanation: string }>('/api/quiz/submit', {
-      method: 'POST',
-      body: JSON.stringify(params),
-    }),
-  },
-
-  // ==========================================================================
-  // Session Management
-  // ==========================================================================
-  
-  sessions: {
-    /**
-     * List all sessions
-     */
-    list: (taskType?: string) =>
-      fetchAPI<ChatSession[]>(`/api/sessions${taskType ? `?task_type=${taskType}` : ''}`),
-
-    /**
-     * Get session by ID
-     */
-    get: (sessionId: string) =>
-      fetchAPI<ChatSession>(`/api/sessions/${sessionId}`),
-
-    /**
-     * Delete session
-     */
-    delete: (sessionId: string) =>
-      fetchAPI<void>(`/api/sessions/${sessionId}`, { method: 'DELETE' }),
+  /**
+   * Delete a session
+   */
+  deleteSession: async (sessionId: string): Promise<void> => {
+    await apiClient.delete(`/api/sessions/${sessionId}`);
   },
 };
 
-export default apiClient;
+// ============================================================================
+// Text Summary API (task-specific endpoints)
+// ============================================================================
+
+export const textSummaryAPI = {
+  /**
+   * Get SSE stream URL for summarization
+   */
+  getSummarizeStreamURL: (): string => {
+    return `${API_BASE_URL}/api/text-summary/summarize`;
+  },
+
+  /**
+   * Get SSE stream URL for followup
+   */
+  getFollowupStreamURL: (sessionId: string): string => {
+    return `${API_BASE_URL}/api/text-summary/sessions/${sessionId}/followup`;
+  },
+};
+
+// ============================================================================
+// Q&A API (task-specific endpoints)
+// ============================================================================
+
+export const qaAPI = {
+  /**
+   * Get SSE stream URL for Q&A
+   */
+  getAskStreamURL: (): string => {
+    return `${API_BASE_URL}/api/qa/ask`;
+  },
+
+  /**
+   * Get SSE stream URL for followup
+   */
+  getFollowupStreamURL: (sessionId: string): string => {
+    return `${API_BASE_URL}/api/qa/sessions/${sessionId}/followup`;
+  },
+};
+
+// ============================================================================
+// Video Summary API (task-specific endpoints)
+// ============================================================================
+
+export interface VideoInfo {
+  id: string;
+  chapter: string;
+  title: string;
+  url: string;
+  duration: number;
+}
+
+export interface VideoSummaryResponse {
+  video_id: string;
+  summary: string;
+  sources: any[];
+  has_summary: boolean;
+  created_at?: string;
+  updated_at?: string;
+}
+
+export const videoSummaryAPI = {
+  /**
+   * Get SSE stream URL for video summarization
+   */
+  getSummarizeStreamURL: (): string => {
+    return `${API_BASE_URL}/api/video-summary/summarize`;
+  },
+
+  /**
+   * Get list of all available videos
+   */
+  getVideos: async (): Promise<VideoInfo[]> => {
+    const response = await apiClient.get<VideoInfo[]>('/api/video-summary/videos');
+    return response.data;
+  },
+
+  /**
+   * Get info for a specific video
+   */
+  getVideoInfo: async (videoId: string): Promise<VideoInfo> => {
+    const encoded = encodeURIComponent(videoId);
+    const response = await apiClient.get<VideoInfo>(`/api/video-summary/videos/${encoded}`);
+    return response.data;
+  },
+
+  /**
+   * Get existing pre-computed summary for a video (non-streaming)
+   */
+  getVideoSummary: async (videoId: string): Promise<VideoSummaryResponse> => {
+    const encoded = encodeURIComponent(videoId);
+    const response = await apiClient.get<VideoSummaryResponse>(`/api/video-summary/summary/${encoded}`);
+    return response.data;
+  },
+};
+
+// ============================================================================
+// Quiz API (task-specific endpoints)
+// ============================================================================
+
+export interface QuizHistory {
+  id: string;
+  topic?: string;
+  chapters?: string[];
+  question_type: string;
+  num_questions: number;
+  created_at: string;
+}
+
+export const quizAPI = {
+  /**
+   * Get SSE stream URL for quiz generation
+   * POST /api/quiz/generate with GenerateQuizRequest body
+   * Returns SSE stream with progress and quiz_id
+   */
+  getGenerateStreamURL: (): string => {
+    return `${API_BASE_URL}/api/quiz/generate`;
+  },
+
+  /**
+   * Get SSE stream URL for answer validation
+   * POST /api/quiz/validate with ValidateAnswersRequest body
+   * Returns SSE stream with incremental validation results
+   */
+  getValidateStreamURL: (): string => {
+    return `${API_BASE_URL}/api/quiz/validate`;
+  },
+
+  /**
+   * Get a specific quiz by ID (non-streaming)
+   * GET /api/quiz/{quiz_id}
+   */
+  getQuiz: async (quizId: string): Promise<{ quiz_id: string; questions: QuizQuestion[] }> => {
+    const response = await apiClient.get(`/api/quiz/${quizId}`);
+    return response.data;
+  },
+
+  /**
+   * Get quiz history for a user
+   * GET /api/quiz/history
+   */
+  getQuizHistory: async (userId: string = 'default_user'): Promise<QuizHistory[]> => {
+    const response = await apiClient.get<QuizHistory[]>('/api/quiz/history', {
+      params: { user_id: userId }
+    });
+    return response.data;
+  },
+
+  /**
+   * Delete a quiz by ID
+   * DELETE /api/quiz/{quiz_id}
+   */
+  deleteQuiz: async (quizId: string): Promise<void> => {
+    await apiClient.delete(`/api/quiz/${quizId}`);
+  },
+
+  /**
+   * Get previous attempts for a quiz
+   * GET /api/quiz/{quiz_id}/attempts
+   */
+  getQuizAttempts: async (quizId: string): Promise<Array<{
+    question_id: number;
+    user_answer: string;
+    is_correct?: boolean;
+    llm_score?: number;
+    llm_feedback?: any;
+    submitted_at?: string;
+  }>> => {
+    const response = await apiClient.get(`/api/quiz/${quizId}/attempts`);
+    return response.data;
+  },
+};
+
+// ============================================================================
+// Chapters API (for filter)
+// ============================================================================
+
+export const chaptersAPI = {
+  /**
+   * Get available chapters (hardcoded based on chapters_urls.json ground truth)
+   *
+   * Note: Chapters are static course content (Chương 2-9) and won't change.
+   * No need for API call - this is the single source of truth.
+   */
+  getChapters: (): string[] => {
+    return [
+      'Chương 2',
+      'Chương 3',
+      'Chương 4',
+      'Chương 5',
+      'Chương 6',
+      'Chương 7',
+      'Chương 8',
+      'Chương 9',
+    ];
+  },
+};

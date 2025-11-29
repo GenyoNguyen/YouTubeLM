@@ -4,23 +4,19 @@
  */
 import React, { useRef, forwardRef, useImperativeHandle, useState } from 'react';
 
+export interface VideoPlayerHandle {
+  seekToTime: (seconds: number) => void;
+}
+
 interface VideoPlayerProps {
   videoUrl: string;
   videoTitle: string;
   onTimeUpdate?: (currentTime: number) => void;
 }
 
-export interface VideoPlayerHandle {
-  seekToTime: (seconds: number) => void;
-}
-
 export const VideoPlayer = forwardRef<VideoPlayerHandle, VideoPlayerProps>(
   function VideoPlayer(
-    {
-      videoUrl,
-      videoTitle,
-      onTimeUpdate,
-    }: VideoPlayerProps,
+    { videoUrl, videoTitle, onTimeUpdate },
     ref
   ) {
     const videoRef = useRef<HTMLVideoElement>(null);
@@ -49,7 +45,7 @@ export const VideoPlayer = forwardRef<VideoPlayerHandle, VideoPlayerProps>(
       }
     };
 
-    // Expose seek function to parent component via forwarded ref
+    // Expose seek function to parent component via ref
     useImperativeHandle(ref, () => ({
       seekToTime,
     }));
@@ -94,8 +90,8 @@ export const VideoPlayer = forwardRef<VideoPlayerHandle, VideoPlayerProps>(
     };
 
     return (
-      <div className="w-full h-full flex flex-col gap-0">
-        <div className="overflow-hidden w-full flex-1 min-h-0">
+      <div className="w-full flex flex-col gap-4">
+        <div className="bg-black rounded-md overflow-hidden w-full aspect-video">
           <video
             ref={videoRef}
             width="100%"
@@ -104,7 +100,7 @@ export const VideoPlayer = forwardRef<VideoPlayerHandle, VideoPlayerProps>(
             onLoadedMetadata={handleLoadedMetadata}
             onPlay={handlePlay}
             onPause={handlePause}
-            className="block w-full h-full object-cover"
+            className="block w-full h-full"
             crossOrigin="anonymous"
           >
             <source src={videoUrl} type="video/mp4" />
@@ -112,21 +108,20 @@ export const VideoPlayer = forwardRef<VideoPlayerHandle, VideoPlayerProps>(
           </video>
         </div>
 
-        {/* Compact Controls Bar */}
-        <div className="flex flex-col gap-1 w-full bg-gray-900 p-2">
-          <p className="text-xs font-bold text-white w-full truncate">
+        <div className="flex flex-col gap-2 w-full">
+          <h2 className="text-lg font-bold text-gray-900 dark:text-white">
             {videoTitle}
-          </p>
+          </h2>
 
-          <div className="w-full flex justify-between items-center px-1 gap-1">
+          <div className="w-full flex justify-between items-center px-2">
             <button
               aria-label="Play/Pause"
               onClick={handlePlayPause}
-              className="p-1.5 rounded bg-blue-600 hover:bg-blue-700 text-white transition-colors flex items-center justify-center"
+              className="p-2 rounded bg-blue-600 hover:bg-blue-700 text-white transition-colors flex items-center justify-center"
             >
               {isPaused ? (
                 <svg
-                  className="w-4 h-4"
+                  className="w-5 h-5"
                   fill="currentColor"
                   viewBox="0 0 20 20"
                   style={{ transform: 'rotate(90deg)' }}
@@ -138,7 +133,7 @@ export const VideoPlayer = forwardRef<VideoPlayerHandle, VideoPlayerProps>(
                   />
                 </svg>
               ) : (
-                <svg className="w-4 h-4" fill="currentColor" viewBox="0 0 20 20">
+                <svg className="w-5 h-5" fill="currentColor" viewBox="0 0 20 20">
                   <path
                     fillRule="evenodd"
                     d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zM7 8a1 1 0 012 0v4a1 1 0 11-2 0V8zm5-1a1 1 0 00-1 1v4a1 1 0 102 0V8a1 1 0 00-1-1z"
@@ -148,13 +143,13 @@ export const VideoPlayer = forwardRef<VideoPlayerHandle, VideoPlayerProps>(
               )}
             </button>
 
-            <span className="text-xs text-gray-300">
+            <span className="text-sm text-gray-600 dark:text-gray-400">
               {formatTime(currentTime)} / {formatTime(duration)}
             </span>
           </div>
 
           {duration > 0 && (
-            <div className="w-full px-1">
+            <div className="w-full px-2">
               <input
                 type="range"
                 min="0"
@@ -170,3 +165,5 @@ export const VideoPlayer = forwardRef<VideoPlayerHandle, VideoPlayerProps>(
     );
   }
 );
+
+VideoPlayer.displayName = 'VideoPlayer';
