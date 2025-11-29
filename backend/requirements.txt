@@ -1,0 +1,10 @@
+# Python dependencies
+fastapi
+uvicorn
+sqlalchemy
+alembic
+psycopg2-binary
+qdrant-client
+openai
+python-dotenv
+
