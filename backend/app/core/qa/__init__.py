@@ -1,2 +1,2 @@
-# Q&A module
+"""Q&A core module."""
 
