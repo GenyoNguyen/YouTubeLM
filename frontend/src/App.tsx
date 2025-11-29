@@ -1,11 +1,3 @@
-<<<<<<< HEAD
-// Main App component
-
-export default function App() {
-  return null;
-}
-
-=======
 /**
  * Main App component
  */
@@ -39,4 +31,3 @@ function App() {
 }
 
 export default App;
->>>>>>> refs/remotes/origin/master
