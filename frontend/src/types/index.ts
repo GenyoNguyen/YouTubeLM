@@ -20,3 +20,5 @@ export interface Source {
   timestamp: string;
 }
 
+export type TaskType = 'text_summary' | 'qa' | 'video_summary' | 'quiz';
+
