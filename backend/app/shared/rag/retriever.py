@@ -70,7 +70,15 @@ def bm25_search(query: str, top_k: int = 10, db: Optional[Session] = None) -> Li
                 "text": row.text,
                 "qdrant_id": row.qdrant_id,
                 "score": float(row.rank_score),
-                "source": "bm25"
+                "source": "bm25",
+                "metadata": {
+                    "video_id": row.video_id,
+                    "video_title": row.video_title,
+                    "video_url": row.video_url,
+                    "start_time": row.start_time,
+                    "end_time": row.end_time,
+                    "text": row.text,
+                }
             })
         
         return chunks
@@ -112,7 +120,15 @@ def vector_search(query: str, top_k: int = 10) -> List[Dict[str, Any]]:
             "text": payload.get("text"),
             "qdrant_id": result["id"],
             "score": float(result["score"]),
-            "source": "vector"
+            "source": "vector",
+            "metadata": {
+                "video_id": payload.get("video_id"),
+                "video_title": payload.get("video_title"),
+                "video_url": payload.get("video_url"),
+                "start_time": payload.get("start_time"),
+                "end_time": payload.get("end_time"),
+                "text": payload.get("text"),
+            }
         })
     
     return chunks
@@ -184,3 +200,138 @@ def retrieve_chunks(
     
     # Return top_k results
     return combined_results[:top_k]
+
+
+# Class-based wrapper for compatibility with services
+class RAGRetriever:
+    """Wrapper class for RAG retrieval functions."""
+    
+    async def retrieve(
+        self,
+        query: str,
+        top_k: int = 10,
+        chapter_filter: Optional[List[str]] = None,
+        use_bm25: bool = True
+    ) -> List[Dict[str, Any]]:
+        """
+        Retrieve chunks (async wrapper).
+        
+        Args:
+            query: Search query
+            top_k: Number of results
+            chapter_filter: Optional chapter filter (not implemented yet)
+            use_bm25: Whether to use BM25 (always True for hybrid search)
+        
+        Returns:
+            List of chunk results
+        """
+        # For now, use equal split between BM25 and vector
+        bm25_k = top_k if use_bm25 else 0
+        vector_k = top_k
+        
+        results = retrieve_chunks(
+            query=query,
+            top_k=top_k,
+            bm25_k=bm25_k,
+            vector_k=vector_k,
+        )
+        
+        return results
+    
+    async def retrieve_by_video(
+        self,
+        video_id: str,
+        max_chunks: int = 200
+    ) -> List[Dict[str, Any]]:
+        """
+        Retrieve all chunks for a specific video.
+        
+        Args:
+            video_id: Video ID
+            max_chunks: Maximum number of chunks to return
+        
+        Returns:
+            List of chunks ordered by timestamp
+        """
+        from app.shared.database.postgres import get_db
+        
+        with get_db() as db:
+            chunks = db.query(Chunk).filter(
+                Chunk.video_id == video_id
+            ).order_by(Chunk.start_time).limit(max_chunks).all()
+            
+            results = []
+            for chunk in chunks:
+                video = db.query(Video).filter(Video.id == video_id).first()
+                results.append({
+                    "chunk_id": chunk.id,
+                    "video_id": chunk.video_id,
+                    "video_title": video.title if video else "Unknown",
+                    "video_url": video.url if video else "",
+                    "start_time": chunk.start_time,
+                    "end_time": chunk.end_time,
+                    "text": chunk.text,
+                    "qdrant_id": chunk.qdrant_id,
+                    "metadata": {
+                        "video_id": chunk.video_id,
+                        "video_title": video.title if video else "Unknown",
+                        "video_url": video.url if video else "",
+                        "start_time": chunk.start_time,
+                        "end_time": chunk.end_time,
+                        "text": chunk.text,
+                    }
+                })
+            
+            return results
+    
+    async def retrieve_by_chapter(
+        self,
+        chapter: str,
+        max_chunks: int = 600
+    ) -> List[Dict[str, Any]]:
+        """
+        Retrieve chunks for a chapter (placeholder - chapter removed from schema).
+        
+        Args:
+            chapter: Chapter name (not used, kept for compatibility)
+            max_chunks: Maximum chunks to return
+        
+        Returns:
+            List of chunks
+        """
+        # Since chapter column was removed, return empty for now
+        # This can be implemented later if needed
+        return []
+    
+    async def list_videos(self, chapter_filter: Optional[str] = None) -> List[Dict[str, Any]]:
+        """List available videos."""
+        from app.shared.database.postgres import get_db
+        
+        with get_db() as db:
+            query = db.query(Video)
+            videos = query.all()
+            
+            return [
+                {
+                    "id": v.id,
+                    "title": v.title,
+                    "url": v.url,
+                    "duration": v.duration,
+                }
+                for v in videos
+            ]
+    
+    async def list_chapters(self) -> List[Dict[str, Any]]:
+        """List available chapters (placeholder - chapter removed)."""
+        return []
+
+
+# Singleton instance
+_rag_retriever = None
+
+def get_rag_retriever() -> RAGRetriever:
+    """Get singleton RAG retriever instance."""
+    global _rag_retriever
+    if _rag_retriever is None:
+        _rag_retriever = RAGRetriever()
+    return _rag_retriever

@@ -33,7 +33,6 @@ LƯU Ý: Mỗi citation [N] tương ứng với một khoảng thời gian trong
 VIDEO_SUMMARY_USER_PROMPT_TEMPLATE = """Dựa vào các chunk sau từ video bài giảng, hãy tạo bản tóm tắt chi tiết và có cấu trúc cho **TOÀN BỘ** nội dung video.
 
 **Tiêu đề video**: {video_title}
-**Chương**: {chapter}
 **Thời lượng video**: {duration} giây
 
 # CÁC ĐOẠN TRÍCH TỪ VIDEO (SẮP XẾP THEO THỜI GIAN):
@@ -71,5 +70,53 @@ Tạo bản tóm tắt TOÀN BỘ nội dung video theo CẤU TRÚC SAU:
 - Trích dẫn nguồn [1], [2], [3]... ngay sau mỗi thông tin.
 - Sử dụng đầy đủ các chunk được cung cấp để bao quát toàn bộ nội dung video.
 - Chỉ sử dụng thông tin có trong các chunk.
+"""
+
+QUICK_SUMMARY_USER_PROMPT_TEMPLATE = """Dựa vào transcript sau từ video bài giảng, hãy tạo bản tóm tắt ngắn gọn (quick summary) cho video.
+
+**Tiêu đề video**: {video_title}
+
+# TRANSCRIPT:
+
+{transcript}
+
+---
+
+# YÊU CẦU:
+
+Tạo bản tóm tắt ngắn gọn (khoảng 200-300 từ) bao gồm:
+- Mục tiêu chính của bài giảng
+- 3-5 điểm quan trọng nhất
+- Kết luận ngắn gọn
+
+**QUAN TRỌNG**: 
+- Ngắn gọn, súc tích
+- Chỉ sử dụng thông tin có trong transcript
+- Sử dụng tiếng Việt
+"""
+
+CHAPTER_SUMMARY_USER_PROMPT_TEMPLATE = """Dựa vào nội dung từ {num_videos} video trong chương, hãy tạo bản tóm tắt tổng hợp cho toàn bộ chương.
+
+**Chương**: {chapter}
+**Số lượng video**: {num_videos}
+
+# NỘI DUNG CÁC VIDEO:
+
+{videos_content}
+
+---
+
+# YÊU CẦU:
+
+Tạo bản tóm tắt tổng hợp cho toàn bộ chương bao gồm:
+- Tổng quan về chương
+- Các chủ đề chính được đề cập
+- Mối liên hệ giữa các video
+- Kết luận tổng hợp
+
+**QUAN TRỌNG**: 
+- Tổng hợp thông tin từ tất cả các video
+- Chỉ sử dụng thông tin có trong nội dung được cung cấp
+- Sử dụng tiếng Việt
 """
 

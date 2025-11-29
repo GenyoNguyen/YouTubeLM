@@ -1,6 +1,7 @@
 # FastAPI application entry point
 
 from fastapi import FastAPI
+from fastapi.middleware.cors import CORSMiddleware
 from app.api import (
     health,
     sessions,
@@ -11,6 +12,15 @@ from app.api import (
 )
 
 app = FastAPI(title="YouTubeLM API")
+
+# Configure CORS
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],  # In production, replace with specific origins
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
 
 # Register routers
 app.include_router(health.router)

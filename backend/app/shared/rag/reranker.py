@@ -42,7 +42,7 @@ def rerank_results(
     # Prepare query-document pairs for reranking
     pairs = []
     for result in results:
-        text = result.get("text", "")
+        text = result.get("text", "") or result.get("metadata", {}).get("text", "")
         pairs.append([query, text])
     
     # Get reranking scores
@@ -62,3 +62,38 @@ def rerank_results(
         return reranked_results[:top_k]
     
     return reranked_results
+
+
+# Class-based wrapper for compatibility with services
+class LocalReranker:
+    """Wrapper class for reranker functions."""
+    
+    def rerank(
+        self,
+        query: str,
+        results: List[Dict[str, Any]],
+        top_k: Optional[int] = None
+    ) -> List[Dict[str, Any]]:
+        """
+        Rerank results (sync wrapper).
+        
+        Args:
+            query: Search query
+            results: List of results to rerank
+            top_k: Optional top K results to return
+        
+        Returns:
+            Reranked results
+        """
+        return rerank_results(query, results, top_k)
+
+
+# Singleton instance
+_local_reranker = None
+
+def get_local_reranker() -> LocalReranker:
+    """Get singleton reranker instance."""
+    global _local_reranker
+    if _local_reranker is None:
+        _local_reranker = LocalReranker()
+    return _local_reranker

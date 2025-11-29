@@ -51,3 +51,25 @@ def init_db():
     """Initialize database tables."""
     from app.models import Base
     Base.metadata.create_all(bind=engine)
+
+
+# Class-based wrapper for compatibility with services
+class PostgresClient:
+    """Wrapper class for PostgreSQL database operations."""
+    
+    @contextmanager
+    def session_scope(self):
+        """Get database session context manager."""
+        with get_db() as db:
+            yield db
+
+
+# Singleton instance
+_postgres_client = None
+
+def get_postgres_client() -> PostgresClient:
+    """Get singleton PostgreSQL client instance."""
+    global _postgres_client
+    if _postgres_client is None:
+        _postgres_client = PostgresClient()
+    return _postgres_client
