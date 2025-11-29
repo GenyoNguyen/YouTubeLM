@@ -1,29 +1,29 @@
 import React, { useCallback, useEffect, useState, useRef } from 'react';
-import { HStack, VStack, Box, useToast, useBreakpointValue, Button, Text, useColorModeValue } from '@chakra-ui/react';
-import { ArrowBackIcon } from '@chakra-ui/icons';
 import { useNavigate } from 'react-router-dom';
 import { useQueryClient } from '@tanstack/react-query';
-import { MessageList } from './MessageList';
-import { VideoSummaryDisplay } from './VideoSummaryDisplay';
-import { ChatInput } from './ChatInput';
-import { Sidebar } from './Sidebar';
-import { VideoPlayer } from '../VideoPlayer';
-import { QuizDisplay } from './QuizDisplay';
-import { ResizablePanels } from '../shared/ResizablePanels';
-import { useChatStore } from '../../stores/chatStore';
-import { useQuizStore } from '../../stores/quizStore';
-import { useSSE } from '../../hooks/useSSE';
-import { textSummaryAPI, qaAPI, videoSummaryAPI, sessionsAPI, quizAPI } from '../../services/api';
-import type { VideoInfo } from '../../services/api';
-import { ChatMessage, ChatSession, Quiz, TaskType } from '../../types';
-import { getTaskColor } from '../../utils/taskColors';
-import { ColorModeSwitcher } from '../ColorModeSwitcher';
+import { MessageList } from '../components/Chat/MessageList';
+import { VideoSummaryDisplay } from '../components/Chat/VideoSummaryDisplay';
+import { ChatInput } from '../components/Chat/ChatInput';
+import { Sidebar } from '../components/Chat/Sidebar';
+import { VideoPlayer } from '../components/VideoPlayer';
+import { QuizDisplay } from '../components/Chat/QuizDisplay';
+import { ResizablePanels } from '../components/shared/ResizablePanels';
+import { useChatStore } from '../stores/chatStore';
+import { useQuizStore } from '../stores/quizStore';
+import { useSSE } from '../hooks/useSSE';
+import { qaAPI, videoSummaryAPI, sessionsAPI, quizAPI } from '../services/api';
+import type { VideoInfo } from '../services/api';
+import { ChatMessage, ChatSession, Quiz, TaskType } from '../types';
+import { getTaskColor } from '../utils/taskColors';
+import { ColorModeSwitcher } from '../components/ColorModeSwitcher';
+import { useToast, ToastContainer } from '../hooks/useToast.tsx';
+import { useBreakpoint } from '../hooks/useBreakpoint';
 
 interface ChatContainerProps {}
 
 export const ChatContainer: React.FC<ChatContainerProps> = () => {
   const navigate = useNavigate();
-  const toast = useToast();
+  const { toast, toasts, removeToast } = useToast();
   const queryClient = useQueryClient();
 
   // Chat store state
@@ -82,16 +82,17 @@ export const ChatContainer: React.FC<ChatContainerProps> = () => {
   const [isInitialLoad, setIsInitialLoad] = useState<boolean>(true);
 
   // Responsive layout: side-by-side on desktop (>= 1024px), stacked on mobile
-  const isDesktop = useBreakpointValue({ base: false, lg: true }, { ssr: false });
+  const isDesktop = useBreakpoint(1024);
 
   // Quiz configuration (local state for UI controls)
   const [quizQuestionType, setQuizQuestionType] = useState<string>('mcq');
   const [quizNumQuestions, setQuizNumQuestions] = useState<number>(5);
+  const [quizVideoUrl, setQuizVideoUrl] = useState<string>('');
 
   // Track previous mode to detect changes
   const prevModeRef = useRef<TaskType>(currentMode);
 
-  // Clear messages when switching between different chat tasks (text_summary, qa, video_summary)
+  // Clear messages when switching between different chat tasks (qa, video_summary)
   useEffect(() => {
     const prevMode = prevModeRef.current;
 
@@ -101,7 +102,7 @@ export const ChatContainer: React.FC<ChatContainerProps> = () => {
     }
 
     // Define chat-based tasks (tasks that share the message display)
-    const chatTasks: TaskType[] = ['text_summary', 'qa', 'video_summary'];
+    const chatTasks: TaskType[] = ['qa', 'video_summary', 'quiz'];
 
     // If switching between different chat tasks, clear messages
     const switchingBetweenChatTasks =
@@ -188,7 +189,7 @@ export const ChatContainer: React.FC<ChatContainerProps> = () => {
                     llm_feedback: attempt.llm_feedback,
                     explanation: explanation,
                   };
-                  addValidationResult(validationResult);
+                  addValidationResult(questionIndex, validationResult);
                 }
               });
             }
@@ -199,7 +200,7 @@ export const ChatContainer: React.FC<ChatContainerProps> = () => {
           }
         } else if (currentMode === 'video_summary' && selectedVideo) {
           // Video summary mode - video will auto-load via existing effect
-        } else if (currentSession?.id && (currentMode === 'text_summary' || currentMode === 'qa')) {
+        } else if (currentSession?.id && currentMode === 'qa') {
           // Restore chat session messages
           try {
             const sessionMessages = await sessionsAPI.getSessionMessages(currentSession.id);
@@ -343,7 +344,7 @@ export const ChatContainer: React.FC<ChatContainerProps> = () => {
     onValidation: (result) => {
       // Handle incremental validation results for quiz
       if (currentMode === 'quiz') {
-        addValidationResult(result);
+                  addValidationResult(result.question_index || 0, result);
       }
     },
     onDone: async (content, sources, sessionId, quizId) => {
@@ -411,13 +412,15 @@ export const ChatContainer: React.FC<ChatContainerProps> = () => {
           role: 'assistant',
           content,
           sources,
-          created_at: new Date().toISOString(),
+          timestamp: new Date(),
         };
         addMessage(assistantMessage);
 
         // Update current session if we got a new session_id from backend
         if (sessionId && (!currentSession || currentSession.id !== sessionId)) {
           setCurrentSession({ id: sessionId } as ChatSession);
+          // Invalidate query cache to refresh the sidebar with new session
+          queryClient.invalidateQueries({ queryKey: ['sessions', currentMode] });
         }
 
         // Reset streaming state
@@ -454,6 +457,11 @@ export const ChatContainer: React.FC<ChatContainerProps> = () => {
     if (currentMode === 'quiz') {
       // Reset quiz state
       resetQuiz();
+      // Reset quiz-specific inputs
+      setQuizQuestionType('mcq');
+      setQuizNumQuestions(5);
+      setQuizVideoUrl('');
+      setQuizSelectedChapters([]);
     } else {
       // Reset chat state
       setCurrentSession(null);
@@ -462,7 +470,7 @@ export const ChatContainer: React.FC<ChatContainerProps> = () => {
       setChatSelectedChapters([]);
       setSelectedVideo(null);
     }
-  }, [currentMode, resetQuiz, setCurrentSession, setMessages, resetStreamingContent, setChatSelectedChapters, setSelectedVideo]);
+  }, [currentMode, resetQuiz, setCurrentSession, setMessages, resetStreamingContent, setChatSelectedChapters, setSelectedVideo, setQuizQuestionType, setQuizNumQuestions, setQuizVideoUrl, setQuizSelectedChapters]);
 
   const handleSelectSession = useCallback(async (sessionId: string) => {
     try {
@@ -528,7 +536,7 @@ export const ChatContainer: React.FC<ChatContainerProps> = () => {
                   llm_feedback: attempt.llm_feedback,
                   explanation: explanation,
                 };
-                addValidationResult(validationResult);
+                  addValidationResult(questionIndex, validationResult);
               }
             });
           }
@@ -610,7 +618,7 @@ export const ChatContainer: React.FC<ChatContainerProps> = () => {
         id: Date.now().toString(),
         role: 'user',
         content: messageText,
-        created_at: new Date().toISOString(),
+        timestamp: new Date(),
       };
       addMessage(userMessage);
     }
@@ -630,16 +638,7 @@ export const ChatContainer: React.FC<ChatContainerProps> = () => {
       let url = '';
       let body: any = {};
 
-      if (currentMode === 'text_summary') {
-        url = currentSession
-          ? textSummaryAPI.getFollowupStreamURL(currentSession.id)
-          : textSummaryAPI.getSummarizeStreamURL();
-        body = {
-          query: messageText,
-          chapters: selectedChapters.length > 0 ? selectedChapters : undefined,
-          session_id: currentSession?.id,
-        };
-      } else if (currentMode === 'qa') {
+      if (currentMode === 'qa') {
         url = currentSession
           ? qaAPI.getFollowupStreamURL(currentSession.id)
           : qaAPI.getAskStreamURL();
@@ -664,6 +663,7 @@ export const ChatContainer: React.FC<ChatContainerProps> = () => {
           chapters: selectedChapters.length > 0 ? selectedChapters : undefined,
           question_type: quizQuestionType,
           num_questions: quizNumQuestions,
+          video_url: quizVideoUrl.trim() || undefined,
           // No session_id for quiz - uses dedicated quiz tables
         };
       } else {
@@ -693,6 +693,7 @@ export const ChatContainer: React.FC<ChatContainerProps> = () => {
     selectedVideo,
     quizQuestionType,
     quizNumQuestions,
+    quizVideoUrl,
     addMessage,
     setIsStreaming,
     setIsGenerating,
@@ -707,13 +708,14 @@ export const ChatContainer: React.FC<ChatContainerProps> = () => {
   const handleSubmitAnswers = useCallback(async () => {
     if (!currentQuiz) return;
 
-    const { userAnswers } = useQuizStore.getState();
+    const quizStore = useQuizStore();
+    const userAnswers = quizStore.userAnswers;
 
     // Convert Map to array of answers
-    const answers = Array.from(userAnswers.entries()).map(([question_index, answer]) => ({
-      question_index,
-      answer,
-    }));
+    const answers = Array.from(userAnswers.entries()).map((entry) => {
+      const [question_index, answer] = entry as [number, string];
+      return { question_index, answer };
+    });
 
     setIsValidating(true);
     clearValidationResults();
@@ -741,387 +743,314 @@ export const ChatContainer: React.FC<ChatContainerProps> = () => {
     }
   }, [currentQuiz, setIsValidating, clearValidationResults, startStream, toast]);
 
+  const colorSchemes: Record<string, { bg: string; hover: string }> = {
+    blue: { bg: 'bg-blue-600', hover: 'hover:bg-blue-700' },
+    green: { bg: 'bg-green-600', hover: 'hover:bg-green-700' },
+    orange: { bg: 'bg-orange-600', hover: 'hover:bg-orange-700' },
+    purple: { bg: 'bg-purple-600', hover: 'hover:bg-purple-700' },
+  };
+
+  const buttonColors = colorSchemes[taskColor] || colorSchemes.blue;
+
   return (
-    <HStack h="100vh" spacing={0} align="stretch">
-      {/* Sidebar - Hide for video_summary mode since it doesn't use chat sessions */}
-      {currentMode !== 'video_summary' && (
-        <Sidebar
-          currentSessionId={currentMode === 'quiz' ? currentQuiz?.id || null : currentSession?.id || null}
-          taskType={currentMode}
-          colorScheme={taskColor}
-          onNewChat={handleNewChat}
-          onSelectSession={handleSelectSession}
-          onDeleteSession={handleDeleteSession}
-        />
-      )}
-      
-      {/* Video Summary Layout with Resizable Panels */}
-      {currentMode === 'video_summary' && (
-        <VStack flex={1} spacing={0} align="stretch" h="100vh" overflow="hidden">
-          {/* Header */}
-          <Box
-            w="full"
-            bg={useColorModeValue('white', 'gray.800')}
-            borderBottom="1px"
-            borderColor={useColorModeValue('gray.200', 'gray.700')}
-            p={4}
-            display="flex"
-            alignItems="center"
-            justifyContent="center"
-            flexShrink={0}
-            position="relative"
-          >
-            <Button
-              position="absolute"
-              left={4}
-              colorScheme={taskColor}
-              variant="solid"
-              onClick={() => navigate('/')}
-              size="md"
-              leftIcon={<ArrowBackIcon />}
-              fontWeight="semibold"
-              boxShadow="md"
-              _hover={{
-                transform: 'translateY(-2px)',
-                boxShadow: 'lg',
-              }}
-              transition="all 0.2s"
-            >
-              Home
-            </Button>
-            <ColorModeSwitcher position="absolute" />
-            <Text fontWeight="bold" fontSize="lg" textAlign="center">
-              Video Summary & Chat
-            </Text>
-          </Box>
-
-          {/* Main Content Area - Responsive Layout */}
-          {isDesktop ? (
-            // Desktop: Side-by-side resizable panels
-            <Box flex={1} minH={0} overflow="hidden">
-              <ResizablePanels
-                direction="horizontal"
-                defaultSizes={[55, 45]}
-                minSizes={[30, 30]}
-              >
-                {/* Left Panel: Video Player */}
-                <Box
-                  w="full"
-                  h="full"
-                  display="flex"
-                  flexDirection="column"
-                  bg="gray.900"
-                  overflow="hidden"
-                >
-                  {selectedVideo ? (
-                    videoLoading ? (
-                      <Box
-                        bg="gray.700"
-                        w="full"
-                        h="full"
-                        display="flex"
-                        alignItems="center"
-                        justifyContent="center"
-                        color="gray.400"
-                        fontSize="sm"
-                      >
-                        Loading video...
-                      </Box>
-                    ) : videoError ? (
-                      <Box
-                        bg="red.600"
-                        w="full"
-                        h="full"
-                        display="flex"
-                        alignItems="center"
-                        justifyContent="center"
-                        color="white"
-                        fontSize="sm"
-                      >
-                        Error loading video
-                      </Box>
-                    ) : videoInfo ? (
-                      (() => {
-                        const embed = toYouTubeEmbed(videoInfo.url);
-                        if (embed) {
-                          const srcWithStart = embed + (embedStartTime !== null ? `${embed.includes('?') ? '&' : '?'}start=${embedStartTime}&autoplay=1` : '');
-                          return (
-                            <Box w="full" h="full" overflow="hidden">
-                              <Box as="iframe" src={srcWithStart} width="100%" height="100%" border={0} />
-                            </Box>
-                          );
-                        }
-                        return <VideoPlayer ref={videoPlayerRef} videoUrl={videoInfo.url} videoTitle={videoInfo.title} />;
-                      })()
-                    ) : (
-                      <Box
-                        bg="gray.700"
-                        w="full"
-                        h="full"
-                        display="flex"
-                        alignItems="center"
-                        justifyContent="center"
-                        color="gray.400"
-                        fontSize="sm"
-                      >
-                        Video Player
-                      </Box>
-                    )
-                  ) : (
-                    <Box
-                      bg="gray.800"
-                      w="full"
-                      h="full"
-                      display="flex"
-                      alignItems="center"
-                      justifyContent="center"
-                      color="gray.300"
-                      fontSize="sm"
-                    >
-                      Please select a video from the dropdown
-                    </Box>
-                  )}
-                </Box>
-
-                {/* Right Panel: Summary */}
-                <VStack
-                  flex={1}
-                  spacing={0}
-                  bg={useColorModeValue('gray.50', 'gray.900')}
-                  align="stretch"
-                  h="full"
-                  overflow="hidden"
-                >
-                  {/* Summary Display Area - Full width for video_summary */}
-                  <Box flex={1} minH={0} h="full" overflow="hidden" position="relative">
-                    <VideoSummaryDisplay
-                      messages={messages}
-                      isStreaming={isStreaming}
-                      streamingContent={streamingContent}
-                      onSeekVideo={handleSeek}
-                    />
-                  </Box>
-
-                  {/* Input Area */}
-                  <Box flexShrink={0}>
-                    <ChatInput
-                      currentMode={currentMode}
-                      colorScheme={taskColor}
-                      onModeChange={setMode}
-                      onSend={handleSend}
-                      isStreaming={isStreaming}
-                      selectedChapters={selectedChapters}
-                      onChaptersChange={setSelectedChapters}
-                      selectedVideo={selectedVideo}
-                      onVideoChange={setSelectedVideo}
-                    />
-                  </Box>
-                </VStack>
-              </ResizablePanels>
-            </Box>
-          ) : (
-            // Mobile: Stacked layout with resizable vertical panels
-            <Box flex={1} minH={0} overflow="hidden">
-              <ResizablePanels
-                direction="vertical"
-                defaultSizes={[60, 40]}
-                minSizes={[30, 30]}
-              >
-                {/* Top Panel: Video Player */}
-                <Box
-                  w="full"
-                  h="full"
-                  display="flex"
-                  flexDirection="column"
-                  bg="gray.900"
-                  overflow="hidden"
-                >
-                  {selectedVideo ? (
-                    videoLoading ? (
-                      <Box
-                        bg="gray.700"
-                        w="full"
-                        h="full"
-                        display="flex"
-                        alignItems="center"
-                        justifyContent="center"
-                        color="gray.400"
-                        fontSize="sm"
-                      >
-                        Loading video...
-                      </Box>
-                    ) : videoError ? (
-                      <Box
-                        bg="red.600"
-                        w="full"
-                        h="full"
-                        display="flex"
-                        alignItems="center"
-                        justifyContent="center"
-                        color="white"
-                        fontSize="sm"
-                      >
-                        Error loading video
-                      </Box>
-                    ) : videoInfo ? (
-                      (() => {
-                        const embed = toYouTubeEmbed(videoInfo.url);
-                        if (embed) {
-                          const srcWithStart = embed + (embedStartTime !== null ? `${embed.includes('?') ? '&' : '?'}start=${embedStartTime}&autoplay=1` : '');
-                          return (
-                            <Box w="full" h="full" overflow="hidden">
-                              <Box as="iframe" src={srcWithStart} width="100%" height="100%" border={0} />
-                            </Box>
-                          );
-                        }
-                        return <VideoPlayer ref={videoPlayerRef} videoUrl={videoInfo.url} videoTitle={videoInfo.title} />;
-                      })()
-                    ) : (
-                      <Box
-                        bg="gray.700"
-                        w="full"
-                        h="full"
-                        display="flex"
-                        alignItems="center"
-                        justifyContent="center"
-                        color="gray.400"
-                        fontSize="sm"
-                      >
-                        Video Player
-                      </Box>
-                    )
-                  ) : (
-                    <Box
-                      bg="gray.800"
-                      w="full"
-                      h="full"
-                      display="flex"
-                      alignItems="center"
-                      justifyContent="center"
-                      color="gray.300"
-                      fontSize="sm"
-                    >
-                      Please select a video from the dropdown
-                    </Box>
-                  )}
-                </Box>
-
-                {/* Bottom Panel: Summary */}
-                <VStack
-                  flex={1}
-                  spacing={0}
-                  bg={useColorModeValue('gray.50', 'gray.900')}
-                  align="stretch"
-                  h="full"
-                  overflow="hidden"
-                >
-                  {/* Summary Display Area - Full width for video_summary */}
-                  <Box flex={1} minH={0} h="full" overflow="hidden" position="relative">
-                    <VideoSummaryDisplay
-                      messages={messages}
-                      isStreaming={isStreaming}
-                      streamingContent={streamingContent}
-                      onSeekVideo={handleSeek}
-                    />
-                  </Box>
-
-                  {/* Input Area */}
-                  <Box flexShrink={0}>
-                    <ChatInput
-                      currentMode={currentMode}
-                      colorScheme={taskColor}
-                      onModeChange={setMode}
-                      onSend={handleSend}
-                      isStreaming={isStreaming}
-                      selectedChapters={selectedChapters}
-                      onChaptersChange={setSelectedChapters}
-                      selectedVideo={selectedVideo}
-                      onVideoChange={setSelectedVideo}
-                    />
-                  </Box>
-                </VStack>
-              </ResizablePanels>
-            </Box>
-          )}
-        </VStack>
-      )}
-
-      {/* Standard Layout (for text_summary, qa, etc.) */}
-      {currentMode !== 'video_summary' && (
-        <VStack flex={1} spacing={0} bg={useColorModeValue('gray.50', 'gray.900')}>
-          {/* Header */}
-          <Box
-            w="full"
-            bg={useColorModeValue('white', 'gray.800')}
-            borderBottom="1px"
-            borderColor={useColorModeValue('gray.200', 'gray.700')}
-            p={4}
-            display="flex"
-            alignItems="center"
-            justifyContent="center"
-            position="relative"
-          >
-            <Button
-              position="absolute"
-              left={4}
-              colorScheme={taskColor}
-              variant="solid"
-              onClick={() => navigate('/')}
-              size="md"
-              leftIcon={<ArrowBackIcon />}
-              fontWeight="semibold"
-              boxShadow="md"
-              _hover={{
-                transform: 'translateY(-2px)',
-                boxShadow: 'lg',
-              }}
-              transition="all 0.2s"
-            >
-              Home
-            </Button>
-            <ColorModeSwitcher position="absolute" />
-            <Text fontWeight="bold" fontSize="lg" textAlign="center">
-              TiepLM: One-for-all AI Assistant - CS431 Deep Learning
-            </Text>
-          </Box>
-
-          {/* Messages Area / Quiz Display */}
-          {currentMode !== 'quiz' ? (
-            <MessageList
-              messages={messages}
-              isStreaming={isStreaming}
-              streamingContent={streamingContent}
-            />
-          ) : (
-            <QuizDisplay
-              quiz={currentQuiz}
-              colorScheme={taskColor}
-              isGenerating={isGenerating}
-              generationProgress={generationProgress}
-              isValidating={isValidating}
-              onSubmitAnswers={handleSubmitAnswers}
-            />
-          )}
-
-          {/* Input Area */}
-          <ChatInput
-            currentMode={currentMode}
+    <>
+      <ToastContainer toasts={toasts} onRemove={removeToast} />
+      <div className="flex h-screen gap-0">
+        {/* Sidebar - Hide for video_summary mode since it doesn't use chat sessions */}
+        {currentMode !== 'video_summary' && (
+          <Sidebar
+            currentSessionId={currentMode === 'quiz' ? currentQuiz?.id || null : currentSession?.id || null}
+            taskType={currentMode}
             colorScheme={taskColor}
-            onModeChange={setMode}
-            onSend={handleSend}
-            isStreaming={isStreaming}
-            selectedChapters={selectedChapters}
-            onChaptersChange={setSelectedChapters}
-            selectedVideo={selectedVideo}
-            onVideoChange={setSelectedVideo}
-            quizQuestionType={quizQuestionType}
-            onQuizQuestionTypeChange={setQuizQuestionType}
-            quizNumQuestions={quizNumQuestions}
-            onQuizNumQuestionsChange={setQuizNumQuestions}
+            onNewChat={handleNewChat}
+            onSelectSession={handleSelectSession}
+            onDeleteSession={handleDeleteSession}
           />
-        </VStack>
-      )}
-    </HStack>
+        )}
+
+        {/* Video Summary Layout with Resizable Panels */}
+        {currentMode === 'video_summary' && (
+          <div className="flex-1 flex flex-col h-screen overflow-hidden">
+            {/* Header */}
+            <div className="w-full bg-white dark:bg-gray-800 border-b border-gray-200 dark:border-gray-700 p-4 flex items-center justify-center shrink-0 relative">
+              <button
+                className={`absolute left-4 ${buttonColors.bg} ${buttonColors.hover} text-white px-4 py-2 rounded-md font-semibold shadow-md hover:-translate-y-0.5 hover:shadow-lg transition-all flex items-center gap-2`}
+                onClick={() => navigate('/')}
+              >
+                <svg
+                  className="w-5 h-5"
+                  fill="none"
+                  stroke="currentColor"
+                  viewBox="0 0 24 24"
+                >
+                  <path
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                    strokeWidth={2}
+                    d="M10 19l-7-7m0 0l7-7m-7 7h18"
+                  />
+                </svg>
+                Home
+              </button>
+              <ColorModeSwitcher position="absolute" />
+              <h1 className="font-bold text-lg text-center text-gray-900 dark:text-white">
+                Video Summary & Chat
+              </h1>
+            </div>
+
+            {/* Main Content Area - Responsive Layout */}
+            {isDesktop ? (
+              // Desktop: Side-by-side resizable panels
+              <div className="flex-1 min-h-0 overflow-hidden">
+                <ResizablePanels
+                  direction="horizontal"
+                  defaultSizes={[55, 45]}
+                  minSizes={[30, 30]}
+                >
+                  {/* Left Panel: Video Player */}
+                  <div className="w-full h-full flex flex-col bg-gray-900 overflow-hidden">
+                    {selectedVideo ? (
+                      videoLoading ? (
+                        <div className="bg-gray-700 w-full h-full flex items-center justify-center text-gray-400 text-sm">
+                          Loading video...
+                        </div>
+                      ) : videoError ? (
+                        <div className="bg-red-600 w-full h-full flex items-center justify-center text-white text-sm">
+                          Error loading video
+                        </div>
+                      ) : videoInfo ? (
+                        (() => {
+                          const embed = toYouTubeEmbed(videoInfo.url);
+                          if (embed) {
+                            const srcWithStart =
+                              embed +
+                              (embedStartTime !== null
+                                ? `${embed.includes('?') ? '&' : '?'}start=${embedStartTime}&autoplay=1`
+                                : '');
+                            return (
+                              <div className="w-full h-full overflow-hidden">
+                                <iframe
+                                  src={srcWithStart}
+                                  width="100%"
+                                  height="100%"
+                                  className="border-0"
+                                  allow="autoplay"
+                                />
+                              </div>
+                            );
+                          }
+                          return (
+                            <VideoPlayer
+                              ref={videoPlayerRef}
+                              videoUrl={videoInfo.url}
+                              videoTitle={videoInfo.title}
+                            />
+                          );
+                        })()
+                      ) : (
+                        <div className="bg-gray-700 w-full h-full flex items-center justify-center text-gray-400 text-sm">
+                          Video Player
+                        </div>
+                      )
+                    ) : (
+                      <div className="bg-gray-800 w-full h-full flex items-center justify-center text-gray-300 text-sm">
+                        Please select a video from the dropdown
+                      </div>
+                    )}
+                  </div>
+
+                  {/* Right Panel: Summary */}
+                  <div className="flex-1 flex flex-col gap-0 bg-gray-50 dark:bg-gray-900 h-full overflow-hidden">
+                    {/* Summary Display Area - Full width for video_summary */}
+                    <div className="flex-1 min-h-0 h-full overflow-hidden relative">
+                      <VideoSummaryDisplay
+                        messages={messages}
+                        isStreaming={isStreaming}
+                        streamingContent={streamingContent}
+                        onSeekVideo={handleSeek}
+                      />
+                    </div>
+
+                    {/* Input Area */}
+                    <div className="shrink-0">
+                      <ChatInput
+                        currentMode={currentMode}
+                        colorScheme={taskColor}
+                        onModeChange={setMode}
+                        onSend={handleSend}
+                        isStreaming={isStreaming}
+                        selectedChapters={selectedChapters}
+                        onChaptersChange={setSelectedChapters}
+                        selectedVideo={selectedVideo}
+                        onVideoChange={setSelectedVideo}
+                      />
+                    </div>
+                  </div>
+                </ResizablePanels>
+              </div>
+            ) : (
+              // Mobile: Stacked layout with resizable vertical panels
+              <div className="flex-1 min-h-0 overflow-hidden">
+                <ResizablePanels
+                  direction="vertical"
+                  defaultSizes={[60, 40]}
+                  minSizes={[30, 30]}
+                >
+                  {/* Top Panel: Video Player */}
+                  <div className="w-full h-full flex flex-col bg-gray-900 overflow-hidden">
+                    {selectedVideo ? (
+                      videoLoading ? (
+                        <div className="bg-gray-700 w-full h-full flex items-center justify-center text-gray-400 text-sm">
+                          Loading video...
+                        </div>
+                      ) : videoError ? (
+                        <div className="bg-red-600 w-full h-full flex items-center justify-center text-white text-sm">
+                          Error loading video
+                        </div>
+                      ) : videoInfo ? (
+                        (() => {
+                          const embed = toYouTubeEmbed(videoInfo.url);
+                          if (embed) {
+                            const srcWithStart =
+                              embed +
+                              (embedStartTime !== null
+                                ? `${embed.includes('?') ? '&' : '?'}start=${embedStartTime}&autoplay=1`
+                                : '');
+                            return (
+                              <div className="w-full h-full overflow-hidden">
+                                <iframe
+                                  src={srcWithStart}
+                                  width="100%"
+                                  height="100%"
+                                  className="border-0"
+                                  allow="autoplay"
+                                />
+                              </div>
+                            );
+                          }
+                          return (
+                            <VideoPlayer
+                              ref={videoPlayerRef}
+                              videoUrl={videoInfo.url}
+                              videoTitle={videoInfo.title}
+                            />
+                          );
+                        })()
+                      ) : (
+                        <div className="bg-gray-700 w-full h-full flex items-center justify-center text-gray-400 text-sm">
+                          Video Player
+                        </div>
+                      )
+                    ) : (
+                      <div className="bg-gray-800 w-full h-full flex items-center justify-center text-gray-300 text-sm">
+                        Please select a video from the dropdown
+                      </div>
+                    )}
+                  </div>
+
+                  {/* Bottom Panel: Summary */}
+                  <div className="flex-1 flex flex-col gap-0 bg-gray-50 dark:bg-gray-900 h-full overflow-hidden">
+                    {/* Summary Display Area - Full width for video_summary */}
+                    <div className="flex-1 min-h-0 h-full overflow-hidden relative">
+                      <VideoSummaryDisplay
+                        messages={messages}
+                        isStreaming={isStreaming}
+                        streamingContent={streamingContent}
+                        onSeekVideo={handleSeek}
+                      />
+                    </div>
+
+                    {/* Input Area */}
+                    <div className="shrink-0">
+                      <ChatInput
+                        currentMode={currentMode}
+                        colorScheme={taskColor}
+                        onModeChange={setMode}
+                        onSend={handleSend}
+                        isStreaming={isStreaming}
+                        selectedChapters={selectedChapters}
+                        onChaptersChange={setSelectedChapters}
+                        selectedVideo={selectedVideo}
+                        onVideoChange={setSelectedVideo}
+                      />
+                    </div>
+                  </div>
+                </ResizablePanels>
+              </div>
+            )}
+          </div>
+        )}
+
+        {/* Standard Layout (for qa, etc.) */}
+        {currentMode !== 'video_summary' && (
+          <div className="flex-1 flex flex-col gap-0 bg-gray-50 dark:bg-gray-900">
+            {/* Header */}
+            <div className="w-full bg-white dark:bg-gray-800 border-b border-gray-200 dark:border-gray-700 p-4 flex items-center justify-center relative">
+              <button
+                className={`absolute left-4 ${buttonColors.bg} ${buttonColors.hover} text-white px-4 py-2 rounded-md font-semibold shadow-md hover:-translate-y-0.5 hover:shadow-lg transition-all flex items-center gap-2`}
+                onClick={() => navigate('/')}
+              >
+                <svg
+                  className="w-5 h-5"
+                  fill="none"
+                  stroke="currentColor"
+                  viewBox="0 0 24 24"
+                >
+                  <path
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                    strokeWidth={2}
+                    d="M10 19l-7-7m0 0l7-7m-7 7h18"
+                  />
+                </svg>
+                Home
+              </button>
+              <ColorModeSwitcher position="absolute" />
+              <h1 className="font-bold text-lg text-center text-gray-900 dark:text-white">
+                YouTubeLM: One-for-all AI Assistant
+              </h1>
+            </div>
+
+            {/* Messages Area / Quiz Display */}
+            {currentMode !== 'quiz' ? (
+              <MessageList
+                messages={messages}
+                isStreaming={isStreaming}
+                streamingContent={streamingContent}
+              />
+            ) : (
+              <QuizDisplay
+                quiz={currentQuiz}
+                colorScheme={taskColor}
+                isGenerating={isGenerating}
+                generationProgress={generationProgress}
+                isValidating={isValidating}
+                onSubmitAnswers={handleSubmitAnswers}
+              />
+            )}
+
+            {/* Input Area */}
+            <ChatInput
+              currentMode={currentMode}
+              colorScheme={taskColor}
+              onModeChange={setMode}
+              onSend={handleSend}
+              isStreaming={isStreaming}
+              selectedChapters={selectedChapters}
+              onChaptersChange={setSelectedChapters}
+              selectedVideo={selectedVideo}
+              onVideoChange={setSelectedVideo}
+              quizQuestionType={quizQuestionType}
+              onQuizQuestionTypeChange={setQuizQuestionType}
+              quizNumQuestions={quizNumQuestions}
+              onQuizNumQuestionsChange={setQuizNumQuestions}
+              quizVideoUrl={quizVideoUrl}
+              onQuizVideoUrlChange={setQuizVideoUrl}
+            />
+          </div>
+        )}
+      </div>
+    </>
   );
 };
 

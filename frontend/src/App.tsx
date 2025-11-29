@@ -6,6 +6,7 @@ import { BrowserRouter, Routes, Route } from "react-router-dom";
 import Login from "./pages/login";
 import Signup from "./pages/signup";
 import LandingPage from "./pages/landing";
+import { ChatContainer } from "./pages/chat";
 // Create a React Query client
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -24,6 +25,7 @@ function App() {
           <Route path="/" element={<LandingPage />} />
           <Route path="/login" element={<Login />} />
           <Route path="/signup" element={<Signup />} />
+          <Route path="/chat" element={<ChatContainer />} />
         </Routes>
       </BrowserRouter>
     </QueryClientProvider>

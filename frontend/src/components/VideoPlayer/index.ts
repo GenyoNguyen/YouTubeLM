@@ -1,2 +1,2 @@
-export { default as VideoPlayer } from './VideoPlayer';
+export { VideoPlayer, type VideoPlayerHandle } from './VideoPlayer';
 

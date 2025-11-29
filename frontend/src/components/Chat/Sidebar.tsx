@@ -2,17 +2,6 @@
  * Sidebar - Chat history sidebar (ChatGPT-style)
  */
 import React from 'react';
-import {
-  Box,
-  VStack,
-  Button,
-  Text,
-  Divider,
-  Spinner,
-  Center,
-  useColorModeValue,
-} from '@chakra-ui/react';
-import { AddIcon } from '@chakra-ui/icons';
 import { useQuery } from '@tanstack/react-query';
 import { SessionItem } from './SessionItem';
 import { sessionsAPI, quizAPI, QuizHistory } from '../../services/api';
@@ -27,6 +16,13 @@ interface SidebarProps {
   onDeleteSession: (sessionId: string) => void;
 }
 
+const colorSchemes: Record<string, { bg: string; hover: string }> = {
+  blue: { bg: 'bg-blue-600', hover: 'hover:bg-blue-700' },
+  green: { bg: 'bg-green-600', hover: 'hover:bg-green-700' },
+  orange: { bg: 'bg-orange-600', hover: 'hover:bg-orange-700' },
+  purple: { bg: 'bg-purple-600', hover: 'hover:bg-purple-700' },
+};
+
 export const Sidebar: React.FC<SidebarProps> = ({
   currentSessionId,
   taskType,
@@ -39,19 +35,28 @@ export const Sidebar: React.FC<SidebarProps> = ({
   const { data: sessions = [], isLoading, refetch } = useQuery({
     queryKey: ['sessions', taskType],
     queryFn: async () => {
+      let fetchedSessions: ChatSession[] = [];
+      
       if (taskType === 'quiz') {
         // Fetch quiz history and convert to session format
         const quizzes = await quizAPI.getQuizHistory();
-        return quizzes.map((quiz: QuizHistory) => ({
+        fetchedSessions = quizzes.map((quiz: QuizHistory) => ({
           id: quiz.id,
           title: quiz.topic || `Quiz ${quiz.num_questions} câu (${quiz.question_type})`,
           created_at: quiz.created_at,
           updated_at: quiz.created_at,
         })) as ChatSession[];
       } else {
-        // Fetch chat sessions
-        return sessionsAPI.getSessions('default_user', taskType);
+        // Fetch chat sessions - get all sessions without limit
+        fetchedSessions = await sessionsAPI.getSessions('default_user', taskType);
       }
+      
+      // Sort sessions by updated_at (newest first) to show recent chats at the top
+      return fetchedSessions.sort((a, b) => {
+        const dateA = new Date(a.updated_at || a.created_at).getTime();
+        const dateB = new Date(b.updated_at || b.created_at).getTime();
+        return dateB - dateA; // Descending order (newest first)
+      });
     },
     refetchInterval: 30000, // Refetch every 30s
   });
@@ -76,7 +81,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
     }
   };
 
-  // Group sessions by date
+  // Group sessions by date and sort within each group
   const groupedSessions = React.useMemo(() => {
     const groups: {
       today: ChatSession[];
@@ -110,59 +115,82 @@ export const Sidebar: React.FC<SidebarProps> = ({
       }
     });
 
+    // Sort each group by updated_at (newest first) to ensure proper ordering
+    const sortByDate = (a: ChatSession, b: ChatSession) => {
+      const dateA = new Date(a.updated_at || a.created_at).getTime();
+      const dateB = new Date(b.updated_at || b.created_at).getTime();
+      return dateB - dateA; // Descending order (newest first)
+    };
+
+    groups.today.sort(sortByDate);
+    groups.yesterday.sort(sortByDate);
+    groups.older.sort(sortByDate);
+
     return groups;
   }, [sessions]);
 
+  const buttonColors = colorSchemes[colorScheme] || colorSchemes.blue;
+
   return (
-    <Box
-      w="280px"
-      h="100vh"
-      bg={useColorModeValue('gray.50', 'gray.900')}
-      borderRight="1px"
-      borderColor={useColorModeValue('gray.200', 'gray.700')}
-      display="flex"
-      flexDirection="column"
-    >
+    <div className="w-[280px] h-screen bg-gray-50 dark:bg-gray-900 border-r border-gray-200 dark:border-gray-700 flex flex-col">
       {/* Header */}
-      <Box p={3} borderBottom="1px" borderColor={useColorModeValue('gray.200', 'gray.700')}>
-        <Button
-          leftIcon={<AddIcon />}
-          colorScheme={colorScheme}
-          size="sm"
-          w="full"
+      <div className="p-3 border-b border-gray-200 dark:border-gray-700">
+        <button
+          className={`${buttonColors.bg} ${buttonColors.hover} text-white text-sm w-full py-2 px-4 rounded-md flex items-center justify-center gap-2 transition-colors`}
           onClick={onNewChat}
         >
+          <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path
+              strokeLinecap="round"
+              strokeLinejoin="round"
+              strokeWidth={2}
+              d="M12 4v16m8-8H4"
+            />
+          </svg>
           {getNewButtonText()}
-        </Button>
-      </Box>
+        </button>
+      </div>
 
       {/* Sessions List */}
-      <Box flex={1} overflowY="auto" p={2}>
+      <div className="flex-1 overflow-y-auto p-2">
         {isLoading ? (
-          <Center h="200px">
-            <Spinner />
-          </Center>
+          <div className="h-[200px] flex items-center justify-center">
+            <svg
+              className="animate-spin h-6 w-6 text-blue-500"
+              xmlns="http://www.w3.org/2000/svg"
+              fill="none"
+              viewBox="0 0 24 24"
+            >
+              <circle
+                className="opacity-25"
+                cx="12"
+                cy="12"
+                r="10"
+                stroke="currentColor"
+                strokeWidth="4"
+              ></circle>
+              <path
+                className="opacity-75"
+                fill="currentColor"
+                d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"
+              ></path>
+            </svg>
+          </div>
         ) : sessions.length === 0 ? (
-          <Center h="200px">
-            <Text fontSize="sm" color={useColorModeValue('gray.500', 'gray.400')}>
+          <div className="h-[200px] flex items-center justify-center">
+            <p className="text-sm text-gray-500 dark:text-gray-400">
               No conversations yet
-            </Text>
-          </Center>
+            </p>
+          </div>
         ) : (
-          <VStack align="stretch" spacing={4}>
+          <div className="space-y-4">
             {/* Today */}
             {groupedSessions.today.length > 0 && (
-              <Box>
-                <Text
-                  fontSize="xs"
-                  fontWeight="bold"
-                  color={useColorModeValue('gray.500', 'gray.400')}
-                  mb={2}
-                  px={2}
-                >
+              <div>
+                <p className="text-xs font-bold text-gray-500 dark:text-gray-400 mb-2 px-2">
                   Today
-                </Text>
-                <VStack align="stretch" spacing={1}>
+                </p>
+                <div className="space-y-1">
                   {groupedSessions.today.map((session) => (
                     <SessionItem
                       key={session.id}
@@ -173,25 +201,20 @@ export const Sidebar: React.FC<SidebarProps> = ({
                       onDelete={(e) => handleDelete(e, session.id)}
                     />
                   ))}
-                </VStack>
-              </Box>
+                </div>
+              </div>
             )}
 
             {/* Yesterday */}
             {groupedSessions.yesterday.length > 0 && (
-              <Box>
-                {groupedSessions.today.length > 0 && <Divider />}
-                <Text
-                  fontSize="xs"
-                  fontWeight="bold"
-                  color={useColorModeValue('gray.500', 'gray.400')}
-                  mb={2}
-                  px={2}
-                  mt={2}
-                >
+              <div>
+                {groupedSessions.today.length > 0 && (
+                  <hr className="border-gray-200 dark:border-gray-700 my-2" />
+                )}
+                <p className="text-xs font-bold text-gray-500 dark:text-gray-400 mb-2 px-2 mt-2">
                   Yesterday
-                </Text>
-                <VStack align="stretch" spacing={1}>
+                </p>
+                <div className="space-y-1">
                   {groupedSessions.yesterday.map((session) => (
                     <SessionItem
                       key={session.id}
@@ -202,26 +225,21 @@ export const Sidebar: React.FC<SidebarProps> = ({
                       onDelete={(e) => handleDelete(e, session.id)}
                     />
                   ))}
-                </VStack>
-              </Box>
+                </div>
+              </div>
             )}
 
             {/* Older */}
             {groupedSessions.older.length > 0 && (
-              <Box>
+              <div>
                 {(groupedSessions.today.length > 0 ||
-                  groupedSessions.yesterday.length > 0) && <Divider />}
-                <Text
-                  fontSize="xs"
-                  fontWeight="bold"
-                  color={useColorModeValue('gray.500', 'gray.400')}
-                  mb={2}
-                  px={2}
-                  mt={2}
-                >
+                  groupedSessions.yesterday.length > 0) && (
+                  <hr className="border-gray-200 dark:border-gray-700 my-2" />
+                )}
+                <p className="text-xs font-bold text-gray-500 dark:text-gray-400 mb-2 px-2 mt-2">
                   Older
-                </Text>
-                <VStack align="stretch" spacing={1}>
+                </p>
+                <div className="space-y-1">
                   {groupedSessions.older.map((session) => (
                     <SessionItem
                       key={session.id}
@@ -232,20 +250,19 @@ export const Sidebar: React.FC<SidebarProps> = ({
                       onDelete={(e) => handleDelete(e, session.id)}
                     />
                   ))}
-                </VStack>
-              </Box>
+                </div>
+              </div>
             )}
-          </VStack>
+          </div>
         )}
-      </Box>
+      </div>
 
       {/* Footer */}
-      <Box p={3} borderTop="1px" borderColor="gray.200">
-        <Text fontSize="xs" color="gray.500" textAlign="center">
-          CS431 Deep Learning Assistant
-        </Text>
-      </Box>
-    </Box>
+      <div className="p-3 border-t border-gray-200 dark:border-gray-700">
+        <p className="text-xs text-gray-500 dark:text-gray-400 text-center">
+          YouTubeLM: One-for-all AI Assistant 
+        </p>
+      </div>
+    </div>
   );
 };
-
