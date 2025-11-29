@@ -22,3 +22,5 @@ export interface Source {
   chapter: string;
 }
 
+export type TaskType = 'text_summary' | 'qa' | 'video_summary' | 'quiz';
+
